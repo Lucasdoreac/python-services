@@ -1,1 +1,2 @@
 sib-api-v3-sdk @ git+https://github.com/sendinblue/APIv3-python-library.git@9a5807c149db7855eca346b1d7829a96481f495c 
+python-python-dotenv==1.0.0
