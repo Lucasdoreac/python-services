@@ -1,0 +1,6 @@
+sib-api-v3-sdk @ git+https://github.com/sendinblue/APIv3-python-library.git@9a5807c149db7855eca346b1d7829a96481f495c 
+python-dotenv==1.0.0
+Flask==2.2.3
+Flask-Cors==3.0.10
+requests==2.28.2
+jsonify==0.5
