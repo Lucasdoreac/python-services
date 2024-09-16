@@ -4,6 +4,13 @@ from DAL.auth_repository import AuthenticationRepository
 
 
 class AuthenticationController:
+    _authentication_instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._authentication_instance is None:
+            cls._authentication_instance = super(AuthenticationController, cls).__new__(cls)
+        return cls._authentication_instance
+
     def __init__(self):
         self.tokens_repository = AuthenticationRepository()
 
