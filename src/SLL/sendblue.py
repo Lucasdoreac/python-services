@@ -17,7 +17,7 @@ class SendBlue:
         self.configuration = sib_api_v3_sdk.Configuration()
         self.configuration.api_key["api-key"] = self.api_secret
 
-    def send_auth_mail(self, email, nome, hashAuth):
+    def send_auth_mail(self, email, nome, hashAuth=None):
         api_instance = sib_api_v3_sdk.TransactionalEmailsApi(
             sib_api_v3_sdk.ApiClient(self.configuration)
         )

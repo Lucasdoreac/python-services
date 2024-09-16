@@ -1,0 +1,33 @@
+[tool.poetry]
+name = "python-services"
+version = "0.1.0"
+description = ""
+authors = ["GuiMcs00 <guilherme.amaral2004@gmail.com>"]
+readme = "README.md"
+packages = [
+    {include = "src", from = "."},
+    {include = "DAL", from = "src"},
+    {include = "BLL", from = "src"},
+    {include = "SLL", from="src"},
+    {include = "DTO", from="src"}
+]
+
+
+[tool.poetry.dependencies]
+python = "^3.12"
+sib-api-v3-sdk = "^7.6.0"
+python-dotenv = "^1.0.1"
+flask = "^3.0.3"
+flask-cors = "^4.0.0"
+requests = "^2.31.0"
+jsonify = "^0.5"
+werkzeug = "^3.0.2"
+pymongo = "^4.6.3"
+pytest = "^8.1.1"
+mongomock = "^4.1.2"
+setuptools = "^69.5.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

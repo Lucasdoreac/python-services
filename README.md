@@ -1,21 +1,13 @@
 # python-services
 # Setting env 
-1. sudo apt-get install python3-venv
-2. linux => python3 -m venv .
-## windows
-3. pip install virtualenv
-4. windows => python -m virtualenv .
-5. abra o powershell como adm 
-6. Set-ExecutionPolicy -ExecutionPolicy RemoteSigned
-
+[Install Poetry](https://python-poetry.org/docs/#installing-with-the-official-installer)
+Install Pycharm
 
 ## activating and deactivating virtual env
-### linux
-1. . bin/activate
-2. deactivate
-### windows (not sure if it works properly)
-1. .\Scripts\activate
-2. .\Scripts\deactivate
+1. poetry env use python3.12
 
-## install dependencies with pip
-python3 -m pip install -r requirements.txt
+## install dependencies with poetry
+poetry install
+
+## install and config poetry in pycharm
+https://www.jetbrains.com/help/pycharm/poetry.html#poetry-env
