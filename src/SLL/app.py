@@ -25,7 +25,7 @@ def create_app(config_class):
     def hello_world():
         return "<p>Hello, World!</p>"
 
-    @app.route('/auth-mail', methods=['POST'])
+    @app.route('/auth/send-link', methods=['POST'])
     def auth_mail():
         # inject controller
         authentication_controller = AuthenticationController()
@@ -52,6 +52,14 @@ def create_app(config_class):
             return jsonify({'error': str(e)}), 503
 
         return jsonify({'message': 'Magic link sent successfully'}), 201
+
+    @app.route('/auth/validate', methods=['GET'])
+    def validate_hash():
+        authentication_controller = AuthenticationController()
+        valid_hash = authentication_controller.is_token_valid(token=request.args.get('token'), email=request.args.get('email'))
+
+        return jsonify(valid_hash), 200
+
 
     @app.route('/buildings', methods=['GET'])
     def get_buildings():
