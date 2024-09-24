@@ -1,0 +1,131 @@
+swagger: "2.0"
+info:
+  version: "1.0.0"
+  title: "API de Eventos"
+  description: "Documentação da API para gerenciamento de eventos"
+host: "127.0.0.1:5000"
+basePath: "/"
+schemes:
+  - "http"
+paths:
+  /events:
+    post:
+      summary: "Registrar um novo evento"
+      description: "Endpoint para registrar um novo evento com as informações fornecidas no corpo da requisição."
+      consumes:
+        - "application/json"
+      parameters:
+        - in: "body"
+          name: "event"
+          description: "Dados do novo evento"
+          required: true
+          schema:
+            type: "object"
+            required:
+              - name
+              - organizer
+              - eventTypeId
+              - odsTypeId
+              - subscriptionLink
+              - description
+              - graduationId
+              - targetPublic
+              - resources
+              - expectedSubscribers
+              - studentsMonitors
+              - eventLogo
+            properties:
+              name:
+                type: "string"
+                description: "Nome do evento"
+                example: "Event name"
+              organizer:
+                type: "object"
+                properties:
+                  email:
+                    type: "string"
+                    description: "Email do organizador"
+                    example: "guilherme.amaral2004@gmail.com"
+                  id:
+                    type: "integer"
+                    description: "ID do organizador"
+                    example: 999865850
+                  name:
+                    type: "string"
+                    description: "Nome do organizador"
+                    example: "guilherme"
+              eventTypeId:
+                type: "string"
+                description: "ID do tipo de evento"
+                example: "eventTypeId"
+              odsTypeId:
+                type: "string"
+                description: "ID do tipo de ODS"
+                example: "odsTypeId"
+              subscriptionLink:
+                type: "string"
+                description: "Link para inscrição"
+                example: "subscriptionLink"
+              description:
+                type: "string"
+                description: "Descrição do evento"
+                example: "description"
+              graduationId:
+                type: "string"
+                description: "ID da graduação"
+                example: "graduationId"
+              targetPublic:
+                type: "string"
+                description: "Público alvo do evento"
+                example: "targetPublic"
+              resources:
+                type: "string"
+                description: "Recursos necessários para o evento"
+                example: "resources"
+              expectedSubscribers:
+                type: "string"
+                description: "Número esperado de inscritos"
+                example: "expectedSubscribers"
+              roomType:
+                type: "array"
+                description: "Tipos de salas disponíveis para o evento"
+                items:
+                  type: "string"
+                  example: "roomType"
+              entrepreneuralPath:
+                type: "string"
+                description: "Caminho empreendedor relacionado ao evento"
+                example: "entrepreneuralPath"
+              extensionProject:
+                type: "string"
+                description: "Projeto de extensão relacionado ao evento"
+                example: "extensionProject"
+              studentsMonitors:
+                type: "array"
+                description: "IDs dos monitores estudantes do evento"
+                items:
+                  type: "integer"
+                  example: 31891942
+              eventLogo:
+                type: "string"
+                description: "Logo do evento"
+                example: "eventLogo"
+      responses:
+        201:
+          description: "Evento criado com sucesso"
+          schema:
+            type: "object"
+            properties:
+              success:
+                type: "string"
+                description: "Mensagem de confirmação"
+                example: "Event registration successful"
+        400:
+          description: "Erro de validação ou dados faltando"
+          schema:
+            type: "object"
+            properties:
+              error:
+                type: "string"
+                description: "Mensagem de erro"
+                example: "Missing field: name"
