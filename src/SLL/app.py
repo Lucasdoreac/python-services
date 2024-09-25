@@ -30,14 +30,9 @@ def create_app(config_class):
     app.register_blueprint(resources_bp)
 
     # Health check
-    @app.route('/hello', methods=['GET'])
-    @swag_from(get_swagger_specification('/hello'))
-    def hello_world():
-        return jsonify(message="Hello, World!")
+    @app.route('/health', methods=['GET'])
+    @swag_from(get_swagger_specification('/health'))
+    def health():
+        return jsonify(True)
 
     return app
-
-
-if __name__ == '__main__':
-    app = create_app(get_config())
-    app.run(host=app.config['SERVER_HOST'], port=app.config['SERVER_PORT'])

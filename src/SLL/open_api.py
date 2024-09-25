@@ -1,21 +1,16 @@
 def get_swagger_specification(path, method=None):
-    if path == '/hello':
+    if path == '/health':
         return {
-            "summary": "Hello World",
-            "description": "Endpoint simples de teste",
+            "summary": "Health Check",
+            "description": "Saúde da nossa aplicação",
             "responses": {
                 "200": {
                     "description": "Sucesso",
                     "content": {
                         "application/json": {
                             "schema": {
-                                "type": "object",
-                                "properties": {
-                                    "message": {
-                                        "type": "string",
-                                        "example": "Hello, World!"
-                                    }
-                                }
+                                "type": "boolean",
+                                "example": True
                             }
                         }
                     }

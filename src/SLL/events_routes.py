@@ -3,9 +3,10 @@ from flasgger import swag_from
 
 from BLL import FlowController
 from .open_api import get_swagger_specification
+from .auth_decorators import api_key_required
 
+# Define your Flask Blueprint
 events_bp = Blueprint('events', __name__)
-
 
 class EventsRoutes:
     @staticmethod
@@ -173,7 +174,7 @@ class EventsRoutes:
         # Getting the json data from the request
         data = request.json
         if not data:
-            return jsonify({'error': 'Missing date'}), 400
+            return jsonify({'error': 'Missing data'}), 400
         return FlowController.register_event_from_json(data)
 
     @staticmethod
@@ -316,6 +317,3 @@ class EventsRoutes:
     # @swag_from(get_swagger_specification('/events', 'GET'))
     def get_events():
         return FlowController.find_all_events()
-
-
-events_routes = EventsRoutes()
