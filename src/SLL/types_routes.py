@@ -1,6 +1,7 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify
 from flasgger import swag_from
 
+from .auth_decorators import APIKeyAuth
 from BLL import FlowController
 
 types_bp = Blueprint('types', __name__)
@@ -9,6 +10,7 @@ types_bp = Blueprint('types', __name__)
 class TypesRoutes:
     @staticmethod
     @types_bp.route('/types', methods=['GET'])
+    @APIKeyAuth()
     @swag_from({
         "summary": "Obter todos os tipos de eventos.",
         "description": "Endpoint para recuperar todos os eventos registrados.",
@@ -90,6 +92,7 @@ class TypesRoutes:
 
     @staticmethod
     @types_bp.route('/types/<string:collection>', methods=['GET'])
+    @APIKeyAuth()
     @swag_from({
         "summary": "Obter tipos por coleção específica",
         "description": "Endpoint para recuperar os tipos de uma coleção específica, como 'rooms' ou 'ODS'.",

@@ -4,6 +4,7 @@ from hashlib import sha256
 from flask import Blueprint, jsonify, request
 from flasgger import swag_from
 
+from SLL.auth_decorators import token_required
 from SLL.email_service import send_magic_link
 from BLL import AuthenticationController
 
@@ -102,6 +103,7 @@ class AuthRoutes:
 
     @staticmethod
     @auth_bp.route('/auth/validate', methods=['GET'])
+    @token_required
     @swag_from({
         "summary": "Validar hash de autenticação",
         "description": "Endpoint para validar o hash de autenticação enviado para o email.",
@@ -153,11 +155,7 @@ class AuthRoutes:
         }
     })
     def validate_hash():
-        authentication_controller = AuthenticationController()
-        valid_hash = authentication_controller.is_token_valid(token=request.args.get('token'),
-                                                              email=request.args.get('email'))
-
-        return jsonify(valid_hash), 200
+        return jsonify(True), 200
 
 
 auth_routes = AuthRoutes()
