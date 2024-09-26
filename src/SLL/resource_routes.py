@@ -1,15 +1,17 @@
 from flask import Blueprint, jsonify, request
 from flasgger import swag_from
 
+from .auth_decorators import APIKeyAuth
 from BLL import FlowController
 
 resources_bp = Blueprint('resources', __name__)
 
 
-class ResourcesRoutes:
+class ResourcesRoutes(APIKeyAuth):
 
     @staticmethod
     @resources_bp.route('/buildings', methods=['GET'])
+    @APIKeyAuth()
     @swag_from({
         "summary": "Obter todos os edifícios.",
         "description": "Endpoint para recuperar todos os edifícios.",
@@ -92,6 +94,7 @@ class ResourcesRoutes:
 
     @staticmethod
     @resources_bp.route('/rooms', methods=['GET'])
+    @APIKeyAuth()
     @swag_from({
         "summary": "Obter todas as salas.",
         "description": "Endpoint para recuperar todas as salas disponíveis.",
