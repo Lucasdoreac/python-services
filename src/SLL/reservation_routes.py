@@ -1,9 +1,9 @@
 from flask import Blueprint, jsonify, request
 from flasgger import swag_from
 
-
+from .swagger_docs import get_swagger_specification
+from .auth_decorators import token_required
 from BLL import FlowController
-
 
 reservation_bp = Blueprint('reservation_bp', __name__)
 
@@ -11,7 +11,8 @@ reservation_bp = Blueprint('reservation_bp', __name__)
 class ReservationRoutes:
     @staticmethod
     @reservation_bp.route('/reservations', methods=['POST'])
-    # @swag_from('../open_api/post_reservation.yaml')
+    @token_required
+    @swag_from(get_swagger_specification(path='reservations', method='POST'))
     def post_reservation():
         data = request.json
         if not data:
@@ -20,10 +21,12 @@ class ReservationRoutes:
 
     @staticmethod
     @reservation_bp.route('/reservations/<string:date>', methods=['GET'])
-    # @swag_from('../open_api/get_reservation.yaml')
+    @swag_from(get_swagger_specification(path='reservations', method='GET', resource='date'))
     def get_reservation_by_date(date: str):
-        reservations = FlowController.filter_reservation_by_date(date)
-        return jsonify(reservations), 200
+        reservation = FlowController.filter_reservation_by_date(date)
+        if reservation:
+            return jsonify({"reservations": reservation}), 200
+        return jsonify({"error": "Reservation not found"}), 404
 
 
 reservation_routes = ReservationRoutes()

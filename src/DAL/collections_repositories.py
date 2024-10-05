@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from .base_repository import BaseRepository
 
 
@@ -38,7 +39,15 @@ class ReservationsRepository(BaseRepository):
     def get_collection_name(self):
         return self.db.reservations
     def get_reservation_by_date(self, date):
-        return self.convert_id(list(self.get_collection_name().find({"date": date})))
+        end_date = date + timedelta(days=1)
+        query = {
+            "startAt": {
+                "$gte": date,
+                "$lt": end_date
+            }
+
+        }
+        return self.convert_id(list(self.get_collection_name().find(query)))
 
 
 

@@ -1,4 +1,3 @@
-# auth_decorators.py
 from flask import request, jsonify
 from abc import ABC, abstractmethod
 from functools import wraps
@@ -12,6 +11,8 @@ api_keys = [
     "test"
 ]
 
+
+# Classe decorator não funciona no flask
 class AbstractAuthentication(ABC):
     """
     Abstract class for authentication, providing a template for verifying credentials.
@@ -61,7 +62,6 @@ class TokenAuth(AbstractAuthentication):
 def api_key_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # Get the API key from the headers
         api_key = request.headers.get('x-api-key')
         if api_key and api_key in api_keys:
             return f(*args, **kwargs)

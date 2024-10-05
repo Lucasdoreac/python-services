@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+from datetime import datetime
+
 from bson import ObjectId
 
 from .mongodb_factory import MongoDBConnectionFactory
@@ -8,6 +10,7 @@ class BaseRepository(ABC):
     def __init__(self):
         self.db = MongoDBConnectionFactory.get_db()
         self.types_collection = self.db.types
+        self.reservations_collection = self.db.reservations
         # self.collection = self.db[self.get_collection_name()]
 
     @abstractmethod

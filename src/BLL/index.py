@@ -66,7 +66,6 @@ class FlowController:
         except ValueError as e:
             return jsonify({'error': f'Invalid data format: {str(e)}'}), 400
 
-
     def filter_reservation_by_date(date: str):
 
         try:
@@ -78,12 +77,14 @@ class FlowController:
 
             filter_by_date = reservations_repository.get_reservation_by_date(date_obj)
 
-            return jsonify({'reservations': filter_by_date}), 200
+            return filter_by_date
 
         except KeyError as e:
             return jsonify({'error': f'Missing field: {str(e)}'}), 400
         except ValueError as e:
             return jsonify({'error': f'Invalid data format: {str(e)}'}), 400
+        except Exception as e:
+            return jsonify({'error': f"An error ocucred: {str(e)}"}), 400
 
     def register_event_from_json(data: Dict[str, Any]):
 
@@ -113,4 +114,3 @@ class FlowController:
 
         except KeyError as e:
             return jsonify({'error': f'Missing field: {str(e)}'}), 400
-

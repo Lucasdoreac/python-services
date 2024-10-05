@@ -3,7 +3,7 @@ from flask_cors import CORS
 from flasgger import Swagger, swag_from
 
 from configmodule import get_config
-from .open_api import get_swagger_specification
+from .swagger_docs import get_swagger_specification
 
 
 # App Factory
