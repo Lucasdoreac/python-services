@@ -1,7 +1,7 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
 from flasgger import Swagger, swag_from
-
+from src import configmodule
 from configmodule import get_config
 from .swagger_docs import get_swagger_specification
 

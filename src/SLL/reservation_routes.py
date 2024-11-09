@@ -1,9 +1,11 @@
 from flask import Blueprint, jsonify, request
 from flasgger import swag_from
-
+from datetime import date,datetime
 from .swagger_docs import get_swagger_specification
 from .auth_decorators import token_required
 from BLL import FlowController
+from SLL.py_log import AppLogger,LogType,Logmessage
+
 
 reservation_bp = Blueprint('reservation_bp', __name__)
 
@@ -16,6 +18,11 @@ class ReservationRoutes:
     def post_reservation():
         data = request.json
         if not data:
+            AppLogger.log(
+                Logmessage.MISSING_DATA,
+                LogType.INFO,
+                ip_address=request.remote_addr,
+            )
             return jsonify({'error': 'Missing date'}), 400
         return FlowController.register_reservation_from_json(data)
 
@@ -26,6 +33,11 @@ class ReservationRoutes:
         reservation = FlowController.filter_reservation_by_date(date)
         if reservation:
             return jsonify({"reservations": reservation}), 200
+        AppLogger.log(
+            Logmessage.RESERVATION_NOT_FOUND,
+            LogType.INFO,
+            ip_address=request.remote_addr,
+        )
         return jsonify({"error": "Reservation not found"}), 404
 
 
