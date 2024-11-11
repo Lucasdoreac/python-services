@@ -1,5 +1,4 @@
 import os
-import logging
 from datetime import datetime,date
 from hashlib import sha256
 from flask import Blueprint, jsonify, request
@@ -60,6 +59,8 @@ class AuthRoutes:
     @token_required
     @swag_from(get_swagger_specification(path='auth', method='GET'))
     def validate_hash():
+        AppLogger.log(Logmessage.TOKEN_VALIDATED, log_type=LogType.INFO, email=request.args.get('email'),
+                      token=request.args.get('token'), ip_address=request.remote_addr)
         return jsonify(True), 200
 
 

@@ -2,7 +2,9 @@ import os
 from hashlib import sha256
 from flask import Blueprint, jsonify, request
 from flasgger import swag_from
-from datetime import datetime, timedelta
+from datetime import datetime
+
+from SLL import AppLogger, Logmessage, LogType
 from auth_service.controller import AuthenticationController
 from functools import wraps
 from auth_service.SLL_auth import send_magic_link
@@ -61,6 +63,3 @@ class AuthRoutes:
     @swag_from(get_swagger_specification(path='auth', method='GET'))
     def validate_hash():
         return jsonify(True), 200
-
-
-
