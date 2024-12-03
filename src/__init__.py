@@ -1,0 +1,1 @@
+from configmodule import get_config
