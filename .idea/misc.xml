@@ -1,11 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-<<<<<<< HEAD
   <component name="Black">
     <option name="sdkName" value="Poetry (python-services)" />
   </component>
-=======
->>>>>>> 0a410fa67bfec76f90df8db7fa74e32d4d482142
   <component name="ProjectRootManager" version="2" project-jdk-name="Poetry (python-services)" project-jdk-type="Python SDK" />
   <component name="PyCharmProfessionalAdvertiser">
     <option name="shown" value="true" />

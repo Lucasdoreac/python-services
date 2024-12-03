@@ -7,7 +7,12 @@ from datetime import datetime
 from SLL import AppLogger, Logmessage, LogType
 from auth_service.controller import AuthenticationController
 from functools import wraps
+
+from flasgger import swag_from
+from flask import Blueprint, jsonify, request
+
 from auth_service.SLL_auth import send_magic_link
+from auth_service.controller import AuthenticationController
 from swagger_docs import get_swagger_specification
 
 auth_bp = Blueprint('auth', __name__)
@@ -37,9 +42,8 @@ class AuthRoutes:
         if not email.endswith('@udf.edu.br'):
             return jsonify({'error': 'Invalid email domain'}), 400
 
-        # Generate hash
-        now = datetime.now()
-        hash_auth = sha256(str(now).encode()).hexdigest()
+        # Generate hash via the controller
+        hash_auth = authentication_controller.generate_hash
 
         # Save the hash and email in the database
         authentication_controller.insert_token(email, hash_auth)

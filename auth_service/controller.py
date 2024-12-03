@@ -1,5 +1,6 @@
 from datetime import datetime,timedelta
 from auth_service.DAL_auth import AuthenticationRepository
+from hashlib import sha256
 
 class AuthenticationController:
     _authentication_instance = None
@@ -18,3 +19,10 @@ class AuthenticationController:
     def insert_token(self, email: str, token: str) -> str:
         expires_at = datetime.now() + timedelta(days=1)
         return self.tokens_repository.insert_authentication(email, token, expires_at)
+
+    @property
+    def generate_hash(self) -> str:
+        now = datetime.now()
+        return sha256(str(now).encode()).hexdigest()
+
+
