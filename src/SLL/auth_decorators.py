@@ -40,7 +40,7 @@ def token_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
 
-        url = f"{os.getenv('URL_AUTH')}/validate"
+        url = f"{os.getenv('URL_AUTH')}/auth/validate"
 
         token = request.headers.get('token') if request.headers.get('token') else request.args.get('token')
         email = request.headers.get('email') if request.headers.get('email') else request.args.get('email')
