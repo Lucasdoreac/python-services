@@ -49,7 +49,7 @@ class AuthRoutes:
         authentication_controller.insert_token(email, hash_auth)
 
         # Send the magic link via email
-        magic_link = f"http://{request.remote_addr}/auth/callback?email={email}&hash={hash_auth}"
+        magic_link = f"{os.getenv('REACT_APP')}/auth/callback?email={email}&hash={hash_auth}"
         if os.getenv('FLASK_ENV') == 'development':
             return jsonify({'magic_link': magic_link}), 201
         try:

@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 from datetime import datetime
 
+
 @dataclass
 class Building:
     name: str
@@ -11,12 +12,14 @@ class Building:
     openAt: str
     mapsLink: str
 
+
 @dataclass
 class Department:
     _id: str
     name: str
     emails: List[str]
     head: str
+
 
 @dataclass
 class Event:
@@ -37,6 +40,7 @@ class Event:
     studentsMonitors: List[int]
     eventLogo: str
 
+
 @dataclass
 class Graduation:
     _id: str
@@ -45,6 +49,7 @@ class Graduation:
     graduation: str
     departamentId: str
 
+
 @dataclass
 class Reservation:
     _id: str
@@ -52,6 +57,7 @@ class Reservation:
     courseId: str
     startAt: datetime
     endAt: datetime
+
 
 @dataclass
 class Room:
@@ -63,9 +69,17 @@ class Room:
     roomNumber: int
     floor: int
 
+
 @dataclass
 class Type:
     _id: str
     types: List[dict]  # This could be further refined into a list of another data class if needed
     collection: str
+
+
+# Auth Service DTOs
+@dataclass
+class TokenMap:
+    email: str
+    token: str
 

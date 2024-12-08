@@ -17,7 +17,6 @@ class AuthRoutes:
     @auth_bp.route('/auth/send-link', methods=['POST'])
     @swag_from(get_swagger_specification('auth', 'POST'))
     def auth_mail():
-        # inject controller
         authentication_controller = AuthenticationController()
         email = request.args.get('email')
         if not email.endswith('@udf.edu.br'):
@@ -29,30 +28,7 @@ class AuthRoutes:
             )
             return jsonify({'error': 'Invalid email domain'}), 400
 
-        # Generate hash
-        now = datetime.now()
-        hash_auth = sha256(str(now).encode()).hexdigest()
-
-        # Save the hash and email in the database
-        authentication_controller.insert_token(email, hash_auth)
-
-        # Send the magic link via email
-        magic_link = f"http://{request.remote_addr}/auth/callback?email={email}&hash={hash_auth}"
-        if os.getenv('FLASK_ENV') == 'development':
-            return jsonify({'magic_link': magic_link}), 201
-        try:
-            send_response = send_magic_link(email, email.split('@')[0], magic_link)
-            if send_response.status_code != 200:
-                AppLogger.log(
-                    Logmessage.FAILED_SEND_EMAIL,
-                    LogType.INFO,
-                    ip_address=request.remote_addr,
-                )
-                return jsonify({'error': 'Email sender service unavailable: failed to send email'}), 503
-        except Exception as e:
-            return jsonify({'error': str(e)}), 503
-
-        return jsonify({'message': 'Magic link sent successfully'}), 201
+        return authentication_controller.insert_token(email)
 
     @staticmethod
     @auth_bp.route('/auth/validate', methods=['GET'])
@@ -60,7 +36,7 @@ class AuthRoutes:
     @swag_from(get_swagger_specification(path='auth', method='GET'))
     def validate_hash():
         AppLogger.log(Logmessage.TOKEN_VALIDATED, log_type=LogType.INFO, email=request.args.get('email'),
-                      token=request.args.get('token'), ip_address=request.remote_addr)
+                      token=request.args.get('token'), ip_address=f"{request.remote_addr}")
         return jsonify(True), 200
 
 

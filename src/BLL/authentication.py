@@ -1,6 +1,8 @@
-from datetime import datetime, timedelta
+import os
+import requests
+from flask import Response, jsonify
 
-from DAL.auth_repository import AuthenticationRepository
+from SLL import AppLogger, Logmessage, LogType
 
 
 class AuthenticationController:
@@ -11,12 +13,32 @@ class AuthenticationController:
             cls._authentication_instance = super(AuthenticationController, cls).__new__(cls)
         return cls._authentication_instance
 
-    def __init__(self):
-        self.tokens_repository = AuthenticationRepository()
+    @staticmethod
+    def is_token_valid(token: str, email: str) -> bool:
+        url = f"{os.getenv('URL_AUTH')}/auth/validate"
+        response = requests.get(url, params={"email": email, "token": token})
+        if response.status_code == 200:
+            return True
+        return False
 
-    def is_token_valid(self, token: str, email: str) -> bool:
-        return self.tokens_repository.validate_authentication(email, token)
+    @staticmethod
+    def insert_token(email: str) -> Response:
+        url = f"{os.getenv('URL_AUTH')}/auth/send-link"
+        try:
+            # Make the request to the internal authentication API
+            response = requests.post(url, params={"email": email})
 
-    def insert_token(self, email: str, token: str) -> str:
-        expires_at = datetime.now() + timedelta(days=1)
-        return self.tokens_repository.insert_authentication(email, token, expires_at)
+            # Create a Flask response using the content and status code from the internal API
+            flask_response = Response(
+                response=response.text,
+                status=response.status_code,
+                content_type=response.headers.get('Content-Type', 'application/json')
+            )
+            return flask_response
+        except requests.exceptions.RequestException as e:
+            AppLogger.log(Logmessage.AUTH_SERVICE_UNAVAILABLE, LogType.ERROR, error=str(e))
+            return Response(
+                response=jsonify({"error": "Service unavailable"}).get_data(as_text=True),
+                status=503,
+                content_type="application/json"
+            )
