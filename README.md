@@ -16,7 +16,8 @@ O Poetry é uma ferramenta para gerenciamento de dependências e empacotamento e
 ## PyCharm
 PyCharm é um ambiente de desenvolvimento integrado (IDE) para Python, desenvolvido pela JetBrains.
 
-!Importante: Não instale em "C:\Program Files\JetBrains\PyCharm 2024", use um diretório sem espaços. Isso é importante para evitar problemas com o Poetry e com a depuração.
+> [!IMPORTANT]
+> Não instale em "C:\Program Files\JetBrains\PyCharm 2024", use um caminho sem espaços (e.g. "C:\jetbrains\pycharm2024\"). Isso é importante para evitar problemas com o Poetry e com a depuração (modo debugger no PyCharm).
 
 [Install Pycharm](https://www.jetbrains.com/pycharm/download/)
 
