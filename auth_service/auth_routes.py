@@ -1,19 +1,10 @@
 import os
-from hashlib import sha256
-from flask import Blueprint, jsonify, request
-from flasgger import swag_from
-from datetime import datetime
-
-from SLL import AppLogger, Logmessage, LogType
-from auth_service.controller import AuthenticationController
 from functools import wraps
-
+import requests
 from flasgger import swag_from
 from flask import Blueprint, jsonify, request
-
-from auth_service.SLL_auth import send_magic_link
 from auth_service.controller import AuthenticationController
-from swagger_docs import get_swagger_specification
+from auth_service.swagger_docs import get_swagger_specification
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -29,6 +20,23 @@ def token_required(f):
         else:
             return jsonify({"message": "Invalid or missing token"}), 403
     return decorated_function
+
+def send_magic_link(email, username, magic_link):
+    """ Sends a magic link email via the cloud function. """
+    url = f"{os.getenv('CLOUD_FUNCTION_URL')}/send_email"
+    payload = {
+        'subject': 'Login Authorization',
+        'content': f"Hello {username}, use this link to login: {magic_link}",
+        'to': [email],
+        'is_html': False
+    }
+    headers = {
+        'X-API-Key': os.getenv('CLOUD_FUNCTION_API_KEY'),
+        'Content-Type': 'application/json'
+    }
+    response = requests.post(url, json=payload, headers=headers)
+    return response
+
 
 # API Routes
 class AuthRoutes:

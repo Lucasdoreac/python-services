@@ -833,7 +833,7 @@ def get_swagger_specification(path, method=None, resource=None):
                 }
             }
 
-    if path == 'rooms':
+    if path == 'rooms/all-rooms':
         if method == 'GET':
             return {
                 "summary": "Obter todas as salas.",
@@ -945,6 +945,159 @@ def get_swagger_specification(path, method=None, resource=None):
                 }
             }
 
+    if path == 'rooms/available-rooms':
+        return {
+            "summary": "Obter salas disponíveis.",
+            "description": "Endpoint para recuperar salas disponíveis com base na data e horário especificados.",
+            "tags": ["Resources"],
+            "operationId": "get_available_rooms",
+            "produces": [
+                "application/json"
+            ],
+            "parameters": [
+                {
+                    "name": "x-api-key",
+                    "in": "header",
+                    "type": "string",
+                    "required": True,
+                    "description": "Chave de API para autenticação"
+                },
+                {
+                    "name": "email",
+                    "in": "header",
+                    "type": "string",
+                    "required": True,
+                    "description": "e-mail autenticado"
+                },
+                {
+                    "name": "token",
+                    "in": "header",
+                    "type": "string",
+                    "required": True,
+                    "description": "token ativo"
+                },
+                {
+                    "name": "date",
+                    "in": "query",
+                    "type": "string",
+                    "required": True,
+                    "description": "Data para filtrar as salas disponíveis (formato: YYYY-MM-DD)"
+                },
+                {
+                    "name": "time",
+                    "in": "query",
+                    "type": "string",
+                    "required": True,
+                    "description": "Horário para filtrar as salas disponíveis (formato: HH:mm)"
+                },
+                {
+                    "name": "page",
+                    "in": "query",
+                    "type": "integer",
+                    "required": False,
+                    "default": 1,
+                    "description": "Número da página para paginação"
+                },
+                {
+                    "name": "page_size",
+                    "in": "query",
+                    "type": "integer",
+                    "required": False,
+                    "default": 10,
+                    "description": "Quantidade de itens por página"
+                }
+            ],
+            "responses": {
+                "200": {
+                    "description": "Salas disponíveis retornadas com sucesso",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "data": {
+                                "type": "array",
+                                "description": "Lista de salas disponíveis",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "_id": {
+                                            "type": "string",
+                                            "description": "ID da sala",
+                                            "example": "661945b2e764a62988bbcf3d"
+                                        },
+                                        "name": {
+                                            "type": "string",
+                                            "description": "Nome da sala",
+                                            "example": "Sala 101"
+                                        },
+                                        "type": {
+                                            "type": "integer",
+                                            "description": "Tipo da sala (0 para 'online', 1 para laboratório, etc.)",
+                                            "example": 0
+                                        }
+                                    },
+                                    "required": ["_id", "name"]
+                                }
+                            },
+                            "pagination": {
+                                "type": "object",
+                                "description": "Informações de paginação",
+                                "properties": {
+                                    "page": {
+                                        "type": "integer",
+                                        "description": "Número atual da página",
+                                        "example": 1
+                                    },
+                                    "page_size": {
+                                        "type": "integer",
+                                        "description": "Quantidade de itens por página",
+                                        "example": 10
+                                    },
+                                    "total": {
+                                        "type": "integer",
+                                        "description": "Total de salas disponíveis",
+                                        "example": 50
+                                    },
+                                    "pages": {
+                                        "type": "integer",
+                                        "description": "Total de páginas",
+                                        "example": 5
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "400": {
+                    "description": "Parâmetros obrigatórios ausentes",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "error": {
+                                "type": "string",
+                                "description": "Mensagem de erro",
+                                "example": "Parâmetros 'date' e 'time' são obrigatórios."
+                            }
+                        }
+                    }
+                },
+                "500": {
+                    "description": "Erro interno do servidor",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "error": {
+                                "type": "string",
+                                "description": "Mensagem de erro",
+                                "example": "Erro interno do servidor"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if method == 'GET':
+            pass
+
     if path == 'types':
         if method == 'GET':
             if resource is None:
@@ -958,11 +1111,20 @@ def get_swagger_specification(path, method=None, resource=None):
                     ],
                     "parameters": [
                         {
-                            "name": "x-api-key",
+                            "name": "email",
                             "in": "header",
                             "type": "string",
                             "required": True,
-                            "description": "Chave de API para autenticação"
+                            "description": "Email do usuário para autenticação.",
+                            "example": "usuario@udf.edu.br"
+                        },
+                        {
+                            "name": "token",
+                            "in": "header",
+                            "type": "string",
+                            "required": True,
+                            "description": "Token de autenticação do usuário.",
+                            "example": "Bearer abcdef12345"
                         },
                     ],
                     "responses": {
@@ -1043,7 +1205,20 @@ def get_swagger_specification(path, method=None, resource=None):
                                     }
                                 }
                             }
-                        }
+                        },
+                        "502": {
+                            "description": "Falha na sincronização de dados com uma API externa",
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "error": {
+                                        "type": "string",
+                                        "description": "Mensagem de erro",
+                                        "example": "Failed to fetch data from external API."
+                                    }
+                                }
+                            }
+                        },
                     }
                 }
 
@@ -1055,11 +1230,20 @@ def get_swagger_specification(path, method=None, resource=None):
                     "operationId": "getTypeByCollection",
                     "parameters": [
                         {
-                            "name": "x-api-key",
+                            "name": "email",
                             "in": "header",
                             "type": "string",
                             "required": True,
-                            "description": "Chave de API para autenticação"
+                            "description": "Email do usuário para autenticação.",
+                            "example": "usuario@udf.edu.br"
+                        },
+                        {
+                            "name": "token",
+                            "in": "header",
+                            "type": "string",
+                            "required": True,
+                            "description": "Token de autenticação do usuário.",
+                            "example": "Bearer abcdef12345"
                         },
                         {
                             "name": "collection",
@@ -1118,15 +1302,15 @@ def get_swagger_specification(path, method=None, resource=None):
                                 "required": ["_id", "collection", "types"]
                             }
                         },
-                        "403": {
-                            "description": "Erro de autenticação da api key",
+                        "401": {
+                            "description": "Erro de autenticação de email e/ou token",
                             "schema": {
                                 "type": "object",
                                 "properties": {
                                     "error": {
                                         "type": "string",
                                         "description": "Mensagem de erro",
-                                        "example": "Invalid or missing credentials"
+                                        "example": "Email missing"
                                     }
                                 }
                             }
@@ -1145,17 +1329,203 @@ def get_swagger_specification(path, method=None, resource=None):
                             }
                         },
                         "500": {
-                            "description": "Erro interno do servidor",
+                            "description": "Resposta de uma API externa com JSON inválido",
                             "schema": {
                                 "type": "object",
                                 "properties": {
                                     "error": {
                                         "type": "string",
                                         "description": "Mensagem de erro",
-                                        "example": "Internal server error"
+                                        "example": "Invalid JSON response from external API."
+                                    }
+                                }
+                            }
+                        },
+                        "502": {
+                            "description": "Falha na sincronização de dados com uma API externa",
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "error": {
+                                        "type": "string",
+                                        "description": "Mensagem de erro",
+                                        "example": "Failed to fetch data from external API."
+                                    }
+                                }
+                            }
+                        },
+                    }
+                }
+    if path == 'courses':
+        if method == 'GET':
+            return {
+                "summary": "Obter cursos",
+                "description": "Endpoint para recuperar a lista de cursos disponíveis.",
+                "tags": ["Resources"],
+                "parameters": [
+                    {
+                        "name": "email",
+                        "in": "header",
+                        "type": "string",
+                        "required": True,
+                        "description": "Email do usuário para autenticação.",
+                        "example": "usuario@udf.edu.br"
+                    },
+                    {
+                        "name": "token",
+                        "in": "header",
+                        "type": "string",
+                        "required": True,
+                        "description": "Token de autenticação do usuário.",
+                        "example": "Bearer abcdef12345"
+                    },
+                    {
+                        "name": "course_name",
+                        "in": "query",
+                        "type": "string",
+                        "description": "Filtrar cursos pelo nome.",
+                        "example": "Python Programming"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lista de cursos retornada com sucesso.",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "courses": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "id": {"type": "string"},
+                                            "name": {"type": "string"},
+                                            "description": {"type": "string"}
+                                        },
+                                        "required": ["id", "name"]
                                     }
                                 }
                             }
                         }
-                    }
+                    },
+                    "401": {
+                        "description": "Erro de autenticação de email e/ou token",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "error": {
+                                    "type": "string",
+                                    "description": "Mensagem de erro",
+                                    "example": "Email missing"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Resposta de uma API externa com JSON inválido",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "error": {
+                                    "type": "string",
+                                    "description": "Mensagem de erro",
+                                    "example": "Invalid JSON response from external API."
+                                }
+                            }
+                        }
+                    },
+                    "502": {
+                        "description": "Falha na sincronização de dados com uma API externa",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "error": {
+                                    "type": "string",
+                                    "description": "Mensagem de erro",
+                                    "example": "Failed to fetch data from external API."
+                                }
+                            }
+                        }
+                    },
                 }
+            }
+    if path == 'disciplines':
+        if method == 'GET':
+            return {
+                "summary": "Obter disciplinas",
+                "description": "Endpoint para listar disciplinas disponíveis.",
+                "tags": ["Resources"],
+                "parameters": [
+                    {
+                        "name": "email",
+                        "in": "header",
+                        "type": "string",
+                        "required": True,
+                        "description": "Email do usuário para autenticação.",
+                        "example": "usuario@udf.edu.br"
+                    },
+                    {
+                        "name": "token",
+                        "in": "header",
+                        "type": "string",
+                        "required": True,
+                        "description": "Token de autenticação do usuário.",
+                        "example": "Bearer abcdef12345"
+                    },
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lista de disciplinas retornada com sucesso",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "disciplines": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Erro de autenticação de email e/ou token",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "error": {
+                                    "type": "string",
+                                    "description": "Mensagem de erro",
+                                    "example": "Email missing"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Resposta de uma API externa com JSON inválido",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "error": {
+                                    "type": "string",
+                                    "description": "Mensagem de erro",
+                                    "example": "Invalid JSON response from external API."
+                                }
+                            }
+                        }
+                    },
+                    "502": {
+                        "description": "Falha na sincronização de dados com uma API externa",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "error": {
+                                    "type": "string",
+                                    "description": "Mensagem de erro",
+                                    "example": "Failed to fetch data from external API."
+                                }
+                            }
+                        }
+                    },
+                }
+            }

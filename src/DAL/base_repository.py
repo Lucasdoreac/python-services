@@ -18,8 +18,10 @@ class BaseRepository(ABC):
         """Method to get the specific collection used by the repository."""
         pass
 
-    def find_all(self):
-        return self.convert_id(list(self.get_collection_name().find({})))
+    def find_all(self, query=None):
+        if query is None:
+            return self.convert_id(list(self.get_collection_name().find({})))
+        return self.convert_id(list(self.get_collection_name().find(query)))
 
     def find_by_id(self, _id):
         result = self.get_collection_name().find_one({'_id': ObjectId(_id)})

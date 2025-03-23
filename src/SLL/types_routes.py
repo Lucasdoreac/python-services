@@ -1,9 +1,12 @@
-from flask import Blueprint, jsonify
+import os
+import requests
+from flask import Blueprint, jsonify, request
 from flasgger import swag_from
 
+from . import AppLogger, Logmessage, LogType
 from .swagger_docs import get_swagger_specification
-from .auth_decorators import api_key_required
-from BLL import FlowController
+from .auth_decorators import token_required
+
 
 types_bp = Blueprint('types', __name__)
 
@@ -11,18 +14,68 @@ types_bp = Blueprint('types', __name__)
 class TypesRoutes:
     @staticmethod
     @types_bp.route('/types', methods=['GET'])
-    @api_key_required
+    @token_required
     @swag_from(get_swagger_specification(path='types', method='GET'))
     def get_types():
-        types_data = FlowController.find_all_types()
-        return jsonify({'types': types_data}), 200
+        try:
+            url_base = os.getenv('URL_restapi')
+
+            url = f"{url_base}/types/"
+
+            response = requests.get(url)
+            response.raise_for_status()
+
+            data = response.json()
+
+            if data:
+                return jsonify({'types': data}), 200
+            AppLogger.log(
+                Logmessage.TYPES_NOT_FOUND,
+                LogType.INFO,
+                ip_address=request.remote_addr,
+            )
+
+            return jsonify({'error': "Type not found"}), 404
+
+        except requests.exceptions.RequestException as e:
+            # Handle errors in the external API call
+            return jsonify({'error': 'Failed to fetch data from external API.', 'details': str(e)}), 502
+        except ValueError:
+            # Handle invalid JSON responses
+            return jsonify({'error': 'Invalid JSON response from external API.'}), 500
 
     @staticmethod
     @types_bp.route('/types/<string:collection>', methods=['GET'])
-    @api_key_required
+    @token_required
     @swag_from(get_swagger_specification(path='types', method='GET', resource='collection'))
     def get_type_by_collection(collection: str):
-        return FlowController.find_type_by_collection(collection)
+        try:
+            url_base = os.getenv('URL_restapi')
+
+            url = f"{url_base}/types/?collection_name={collection}"
+
+            response = requests.get(url)
+            response.raise_for_status()
+
+            data = response.json()
+            types = [types_item for item in data for types_item in item.get('types', [])]
+
+            if types:
+                return jsonify({'types': types}), 200
+            AppLogger.log(
+                Logmessage.TYPES_NOT_FOUND,
+                LogType.INFO,
+                ip_address=request.remote_addr,
+            )
+
+            return jsonify({'error': "Type not found"}), 404
+
+        except requests.exceptions.RequestException as e:
+            # Handle errors in the external API call
+            return jsonify({'error': 'Failed to fetch data from external API.', 'details': str(e)}), 502
+        except ValueError:
+            # Handle invalid JSON responses
+            return jsonify({'error': 'Invalid JSON response from external API.'}), 500
 
 
 types_routes = TypesRoutes()

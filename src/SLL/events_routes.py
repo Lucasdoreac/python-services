@@ -1,9 +1,8 @@
 from flask import Blueprint, jsonify, request
 from flasgger import swag_from
-from datetime import date,datetime
 from .swagger_docs import get_swagger_specification
 from BLL import FlowController
-from .auth_decorators import api_key_required
+from .auth_decorators import token_required
 from SLL.py_log import AppLogger,LogType,Logmessage
 
 # Define your Flask Blueprint
@@ -13,7 +12,7 @@ events_bp = Blueprint('events', __name__)
 class EventsRoutes:
     @staticmethod
     @events_bp.route('/events', methods=['POST'])
-    @api_key_required
+    @token_required
     @swag_from(get_swagger_specification(path='events', method='POST'))
     def post_event():
         # Getting the json data from the request
@@ -29,15 +28,35 @@ class EventsRoutes:
 
     @staticmethod
     @events_bp.route('/events', methods=['GET'])
-    @api_key_required
+    @token_required
     @swag_from(get_swagger_specification(path='events', method='GET'))
     def get_events():
-        events = FlowController.find_all_events()
-        if events:
+        try:
+            user_email = request.args.get('userEmail')
+            if not user_email:
+                AppLogger.log(
+                    "Parâmetro userEmail não informado.",
+                    LogType.WARNING,
+                    ip_address=request.remote_addr,
+                )
+                return jsonify({'error': 'Parâmetro userEmail é obrigatório'}), 400
+
+            events = FlowController.find_events_by_user_email(user_email)
+            if not events:
+                AppLogger.log(
+                    Logmessage.EVENTS_NOT_FOUND,
+                    LogType.INFO,
+                    ip_address=request.remote_addr,
+                )
+                return jsonify({'error': 'Events not found'}), 404
+
             return jsonify({'events': events}), 200
-        AppLogger.log(
-            Logmessage.EVENTS_NOT_FOUND,
-            LogType.INFO,
+
+        except Exception as error:
+            AppLogger.log(
+            f"Erro interno: {error}",
+            LogType.ERROR,
             ip_address=request.remote_addr,
-        )
-        return jsonify({'error': 'Events not found'}), 404
+            )
+            return jsonify({'error': 'Internal Server Error'}), 500
+

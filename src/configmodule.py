@@ -10,10 +10,10 @@ class Config:
     TESTING = False
 
     # MongoDB configurations
-    MONGO_HOST = os.getenv("MONGO_HOST")
     MONGO_DATABASE = os.getenv("MONGO_DATABASE")
-    MONGO_USERNAME = os.getenv("MONGO_USERNAME")
+    MONGO_HOST = os.getenv("MONGO_HOST")
     MONGO_PASSWORD = os.getenv("MONGO_PASSWORD")
+    MONGO_USERNAME = os.getenv("MONGO_USERNAME")
 
     # MongoDB URI setup
     MONGO_URI = f"mongodb+srv://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}/"

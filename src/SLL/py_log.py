@@ -13,8 +13,15 @@ from datetime import datetime
 # Missing data
 # Events not found
 # Reservation not found
-# Building not found
 # Rooms not found
+#Campus not found
+#Courses not found
+#Disciplines not found
+#Periods not found
+#Teachers not found
+
+# Deactivate werkzeug logs
+logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
 logging.basicConfig(level=logging.INFO, filename="py_log.log", filemode="a",
                     format="%(asctime)s - %(levelname)s - %(message)s")
@@ -33,8 +40,13 @@ class Logmessage(Enum):
     MISSING_DATA = "Missing data;IP: {ip_address} ; "
     EVENTS_NOT_FOUND = "Events not found;IP: {ip_address} ;"
     RESERVATION_NOT_FOUND = "Reservation not found;IP: {ip_address} ;"
-    BUILDING_NOT_FOUND = "Building not found;IP: {ip_address} ;"
     ROOMS_NOT_FOUND = "Rooms not found;IP: {ip_address};"
+    CAMPUS_NOT_FOUND = "Campus not found;IP: {ip_address};"
+    COURSES_NOT_FOUND = "Courses not found;IP: {ip_address};"
+    DISCIPLINES_NOT_FOUND = "Disciplines not found;IP: {ip_address};"
+    PERIODS_NOT_FOUND = "Periods not found;IP: {ip_address};"
+    TEACHERS_NOT_FOUND = "Teachers not found;IP: {ip_address};"
+    TYPES_NOT_FOUND = "Types not found;IP: {ip_address};"
     AUTH_SERVICE_UNAVAILABLE = "Authentication service unavailable;"
 
 
@@ -54,7 +66,6 @@ class AppLogger:
             current_date = datetime.timestamp(datetime.now())
             timestamp = datetime.timestamp(datetime.now())
             formatted_message = f'{current_date} - {timestamp} - {message.value.format(**kwargs)}'
-
         except KeyError as e:
             logging.error(f"Erro na formatação da mensagem de log:{e}")
             return
