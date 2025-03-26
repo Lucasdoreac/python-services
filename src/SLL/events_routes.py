@@ -15,8 +15,21 @@ class EventsRoutes:
     @token_required
     @swag_from(get_swagger_specification(path='events', method='POST'))
     def post_event():
-        # Getting the json data from the request
+        """
+
+            Endpoint para criação de um novo evento.
+
+            Obtém os dados JSON do request, extrai o email do usuário a partir dos headers,
+            valida a presença de campos essenciais e delega a criação do evento para a função
+            create_event.
+
+            Returns:
+                Response: Objeto Flask Response contendo o ID do evento criado e o status HTTP 201,
+                          ou uma mensagem de erro e o status HTTP correspondente.
+        """
         data = request.json
+        user_email = request.headers.get('email')
+        data['userEmail'] = user_email
         if not data:
             AppLogger.log(
                 Logmessage.MISSING_DATA,
@@ -24,7 +37,7 @@ class EventsRoutes:
                 ip_address=request.remote_addr,
             )
             return jsonify({'error': 'Missing data'}), 400
-        return FlowController.register_event_from_json(data)
+        return FlowController.create_event(data)
 
     @staticmethod
     @events_bp.route('/events', methods=['GET'])
@@ -32,7 +45,7 @@ class EventsRoutes:
     @swag_from(get_swagger_specification(path='events', method='GET'))
     def get_events():
         try:
-            user_email = request.args.get('userEmail')
+            user_email = request.headers.get('email')
             if not user_email:
                 AppLogger.log(
                     "Parâmetro userEmail não informado.",
@@ -60,3 +73,37 @@ class EventsRoutes:
             )
             return jsonify({'error': 'Internal Server Error'}), 500
 
+    @events_bp.route('/events/<string:event_id>', methods=['PUT'])
+    @token_required
+    @swag_from(get_swagger_specification(path='events', method='PUT'))
+    def put_event(event_id):
+        """
+        Endpoint para atualização de um evento existente.
+
+        Obtém os dados JSON do request, extrai o email do usuário a partir dos headers,
+        e delega a atualização do evento (identificado por event_id) para a função
+        FlowController.update_event.
+
+        Args:
+            event_id (str): ID do evento a ser atualizado.
+
+        Returns:
+            Response: Objeto Flask Response contendo o ID do evento atualizado e o status HTTP 200,
+                      ou uma mensagem de erro e o status HTTP correspondente.
+        """
+        data = request.get_json()
+        if not data:
+            AppLogger.log(
+                Logmessage.MISSING_DATA,
+                LogType.INFO,
+                ip_address=request.remote_addr,
+            )
+            return jsonify({'error': 'Missing data'}), 400
+
+        user_email = request.headers.get('email')
+        if not user_email:
+            return jsonify({'error': 'Missing user email in headers'}), 400
+
+        data['userEmail'] = user_email
+
+        return FlowController.update_event(event_id, data)

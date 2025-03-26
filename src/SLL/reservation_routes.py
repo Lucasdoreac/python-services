@@ -41,4 +41,28 @@ class ReservationRoutes:
         return jsonify({"error": "Reservation not found"}), 404
 
 
+    @staticmethod
+    @reservation_bp.route('/reservations', methods=['GET'])
+    @token_required
+    def get_reservations_by_event_id():
+        event_id = request.args.get('eventId')
+        if not event_id:
+            AppLogger.log(
+            "Parâmetro eventId não informado.",
+                    LogType.WARNING,
+                    ip_address=request.remote_addr,
+            )
+            return jsonify({'error': 'Parâmetro eventId é obrigatório'}), 400
+
+        reservations = FlowController.find_reservation_by_event_id(event_id)
+        if not reservations:
+            AppLogger.log(
+                Logmessage.RESERVATION_NOT_FOUND,
+                LogType.INFO,
+                ip_address=request.remote_addr,
+            )
+            return jsonify({'error': 'Events not found'}), 404
+
+        return  reservations, 200
+
 reservation_routes = ReservationRoutes()

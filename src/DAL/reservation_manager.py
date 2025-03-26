@@ -1,3 +1,5 @@
+from typing import Dict, Any
+
 from .mongodb_factory import MongoDBConnectionFactory
 from datetime import datetime
 from bson import ObjectId
@@ -12,28 +14,27 @@ class ReservationManager:
         self.buildings_collection = self.db.buildings
         self.events_collection = self.db.events
 
-    def insert_reservation(self, room_id, course_id, date, start_time, end_time):
+    def insert_reservation(self, room_id, event_id, date, start_time, end_time):
         """
-        Creates a reservation for a given room.
+        Cria uma reserva para uma sala específica.
 
         Args:
-            room_id: Identifier for the room.
-            course_id: Identifier for the course.
-            date (datetime.date): The date of the reservation.
-            start_time (datetime.time): Start time of the reservation.
-            end_time (datetime.time): End time of the reservation.
+            room_id (str): Identificador da sala.
+            event_id (str): Identificador do evento associado à reserva.
+            date (datetime.date): Data da reserva.
+            start_time (datetime.time): Horário de início da reserva.
+            end_time (datetime.time): Horário de término da reserva.
 
         Returns:
-            dict: The reservation object that was inserted.
+            dict: O documento de reserva inserido.
 
         Raises:
-            ValueError: if the time slot is already booked.
+            ValueError: Se houver conflito com outro agendamento.
         """
-
         reservation_start_time = datetime.combine(date, start_time)
         reservation_end_time = datetime.combine(date, end_time)
 
-        # Check for conflicting reservations
+        # Verifica conflitos na reserva para o mesmo horário
         conflict = self.reservation_collection.find_one({
             "roomId": room_id,
             "startAt": {"$lt": reservation_end_time},
@@ -44,7 +45,7 @@ class ReservationManager:
 
         reservation = {
             "roomId": room_id,
-            "courseId": course_id,
+            "eventId": event_id,  # Armazena o eventId no documento
             "startAt": reservation_start_time,
             "endAt": reservation_end_time,
             "status": "requested"
@@ -79,26 +80,50 @@ class ReservationManager:
             print(f"Erro na busca: {e}")
             return []
 
-    def insert_event(self, name, organizer, eventTypeId, odsTypeId, subscriptionLink, description, graduationId,
-                     targetPublic, resources, expectedSubscribers, roomType, entrepreneuralPath, extensionProject, studentsMonitors, eventLogo):
+    def insert_event(self, event_data):
+        """
+            Insere um novo evento na coleção de eventos do banco de dados.
 
-        event = {
-            "name": name,
-            "status": "análise",
-            "organizer": organizer,
-            "eventTypeId": eventTypeId,
-            "odsTypeId": odsTypeId,
-            "subscriptionLink": subscriptionLink,
-            "description": description,
-            "graduationId": graduationId,
-            "targetPublic": targetPublic,
-            "resources": resources,
-            "expectedSubscribers": expectedSubscribers,
-            "roomType": roomType,
-            "entrepreneuralPath": entrepreneuralPath,
-            "extensionProject": extensionProject,
-            "studentsMonitors": studentsMonitors,
-            "eventLogo": eventLogo
-        }
+            Args:
+                event_data (dict): Dicionário contendo os dados do evento a ser inserido.
 
-        self.events_collection.insert_one(event)
+            Returns:
+                str: ID do evento inserido convertido para string, útil para serialização.
+
+            Raises:
+                Exception: Repassa exceções ocorridas durante a inserção no banco de dados.
+            """
+        try:
+            result = self.events_collection.insert_one(event_data)
+            return str(result.inserted_id)
+
+        except Exception as e:
+            raise e
+
+    def update_event(self, event_id: str, event_data: Dict[str, Any]):
+        """
+        Atualiza um evento existente na coleção de eventos.
+
+        Args:
+            event_id (str): ID do evento a ser atualizado.
+            event_data (dict): Dicionário contendo os dados atualizados do evento.
+
+        Returns:
+            str: ID do evento atualizado, útil para confirmação.
+
+        Raises:
+            Exception: Repassa exceções ocorridas durante a atualização no banco de dados.
+        """
+        try:
+            from bson import ObjectId
+            result = self.events_collection.update_one(
+                {"_id": ObjectId(event_id)},
+                {"$set": event_data}
+            )
+            if result.modified_count > 0:
+                return event_id
+            else:
+                # Se nenhum documento foi modificado, pode significar que os dados são idênticos
+                return event_id
+        except Exception as e:
+            raise e

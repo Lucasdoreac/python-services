@@ -19,24 +19,17 @@ events_repository = EventsRepository()
 class FlowController:
 
     @staticmethod
-    def find_all_buildings():
-        return buildings_repository.find_all()
-
-    @staticmethod
-    def find_all_rooms():
-        return rooms_repository.find_all()
-
-    @staticmethod
-    def find_all_types():
-        return types_repository.find_all()
-
-    @staticmethod
     def find_all_events():
         return events_repository.find_all()
 
     @staticmethod
     def find_events_by_user_email(email):
-        return events_repository.find_all({"organizer.email": email })
+        return events_repository.find_all({"organizer.email": email})
+
+    @staticmethod
+    def find_reservation_by_event_id(event_id):
+        return reservations_repository.find_all({"eventId": event_id})
+
 
     def find_type_by_collection(collection: str):
         type_data = types_repository.get_type_by_collection(collection)
@@ -46,28 +39,39 @@ class FlowController:
             return jsonify({'error': 'There is no such type'}), 404
 
     def register_reservation_from_json(data: Dict[str, Any]):
+        """
+        Processa os dados de reserva recebidos via JSON e insere a reserva no sistema.
+
+        Converte a data de reserva (no formato ISO com 'Z') para um objeto datetime,
+        define o início da reserva e calcula o fim (adicionando duas horas),
+        e então delega a inserção ao ReservationManager.
+
+        Args:
+            data (Dict[str, Any]): Dados do JSON da requisição.
+
+        Returns:
+            Response: Objeto Flask Response com mensagem de sucesso e status HTTP 201,
+                      ou mensagem de erro e o status HTTP correspondente.
+        """
         try:
-            # Extracting fields from data
-            room_id = data['room_id']
-            course_id = data['course_id']
-            date_str = data['date']
-            start_time_str = data['start_time']
+            reservation_info = data["roomId"]
+            event_id = reservation_info["eventId"]
+            reservation_date_str = reservation_info["reservationDate"]
+            room_id = reservation_info["roomId"]
 
-            # Converting the data strings to datetime objects
-            date = datetime.strptime(date_str, '%Y-%m-%d')
-            start_time = datetime.strptime(start_time_str, '%H:%M:%S').time()
+            reservation_date = datetime.strptime(reservation_date_str, "%Y-%m-%dT%H:%M:%S.%fZ")
 
-            # Combine date and start_time to form a datetime for the reservation start
-            reservation_start = datetime.combine(date, start_time)
-            # Add two hours to create the reservation end datetime
+            reservation_start = reservation_date
             reservation_end = reservation_start + timedelta(hours=2)
-            # Extract the time component for end_time
-            end_time = reservation_end.time()
 
-            # Creating the object from MongoDB connection
             reservation_system = ReservationManager()
-
-            reservation_system.insert_reservation(room_id, course_id, date, start_time, end_time)
+            reservation_system.insert_reservation(
+                room_id,
+                event_id,
+                reservation_start.date(),
+                reservation_start.time(),
+                reservation_end.time()
+            )
 
             return jsonify({'success': "Reservation attempted"}), 201
 
@@ -76,8 +80,8 @@ class FlowController:
         except ValueError as e:
             return jsonify({'error': f'Invalid data format: {str(e)}'}), 400
 
-    def filter_reservation_by_date(date: str):
 
+    def filter_reservation_by_date(date: str):
         try:
             # Extracting date
             date_str = date
@@ -96,11 +100,12 @@ class FlowController:
         except Exception as e:
             return jsonify({'error': f"An error ocucred: {str(e)}"}), 400
 
+
     def filter_available_rooms(self, date_str: str, time_str: str, page: int, page_size: int):
         """
-        Recebe uma data e um horário e retorna uma lista de salas disponíveis,
-        removendo da lista de todas as salas aquelas com reservas que abrangem o horário informado.
-        Retorna os campos "id", "name" e "campus" de cada sala disponível.
+            Recebe uma data e um horário e retorna uma lista de salas disponíveis,
+            removendo da lista de todas as salas aquelas com reservas que abrangem o horário informado.
+            Retorna os campos "id", "name" e "campus" de cada sala disponível.
         """
         # Obter os 'IDs' das salas indisponíveis para o horário informado
         reservation_system = ReservationManager()
@@ -122,9 +127,24 @@ class FlowController:
 
         return available_rooms, pagination_config
 
+    def find_room_by_id(room_id: str):
+        """
+        Busca sala cadastrada no shared-resources pelo Id
+        :param room_id:
+        :return:
+        """
+        try:
+            url = f"{os.getenv('URL_restapi')}/rooms?room_id={room_id}"
+            response = requests.get(url)
+            if response.status_code != 200:
+                raise Exception("Erro ao buscar sala do shared-resources")
+            return response.json()
+        except Exception as e:
+            return jsonify({'error': f"An error ocucred: {str(e)}"}), 400
+
     def find_all_rooms(self, page: int, page_size: int):
         """
-        Busca todas as salas cadastradas no shared-resources, utilizando paginação.
+            Busca todas as salas cadastradas no shared-resources, utilizando paginação.
         """
         url = f"{os.getenv('URL_restapi')}/rooms"
         response = requests.get(url, params={"page": page, "page_size": page_size})
@@ -137,38 +157,111 @@ class FlowController:
         pagination_config = rooms_json.get("pagination", {})
         return all_rooms, pagination_config
 
-    def register_event_from_json(data: Dict[str, Any]):
 
+    def create_event(data: Dict[str, Any]):
+        """
+            Cria um evento a partir dos dados recebidos e insere-o no sistema.
+
+            Esta função extrai as informações do organizador e demais atributos do evento,
+            constrói o objeto de dados do evento e delega a inserção ao ReservationManager.
+
+            Args:
+                data (Dict[str, Any]): Dados do evento recebidos via JSON.
+
+            Returns:
+                Response: Objeto Flask Response contendo o ID do evento criado e o status HTTP 201,
+                          ou uma mensagem de erro e o status HTTP correspondente.
+        """
         try:
+            # Monta o objeto de dados do evento usando função auxiliar
+            event_data = FlowController.event_data_build(data)
 
-            name = data["tituloEvento"]
-            teacherEmail = data["nomeProfessor"]
-            teacherPhone = data["telefone"] if data["telefone"] else ""
-            teacherName = teacherEmail.split("@")[0]
-            organizer = {"name": teacherName, "email": teacherEmail, "phone": teacherPhone}
-
-            eventTypeId = data["classificacao"]
-            odsId = data["odsId"]
-            odsName = data["odsName"]
-            subscriptionLink = ""
-            description = data["descricaoEvento"]
-            graduationId = data["courseId"]
-            graduationName = data["courseName"]
-            targetPublic = data["publicoAlvo"]
-            resources = data["recursosNecessarios"] if data["recursosNecessarios"] else ""
-            expectedSubscribers = data["numeroParticipantes"]
-            roomType = data["espacos"]
-            entrepreneuralPath = data.get("trilhaDesc", "")
-            extensionProject = data.get("projetoDesc", "")
-            studentsMonitors = data.get("alunosMonitores", "")
-            eventLogo = ""
-
-            register_system = ReservationManager()
-            register_system.insert_event(name, organizer, eventTypeId, odsId, subscriptionLink, description,
-                                         graduationId, targetPublic, resources, expectedSubscribers, roomType,
-                                         entrepreneuralPath, extensionProject, studentsMonitors, eventLogo)
-
-            return jsonify({'success': "Event registration successful"}), 201
+            reservation_manager = ReservationManager()
+            event_id = reservation_manager.insert_event(event_data)
+            return jsonify({"eventId": event_id}), 201
 
         except KeyError as e:
-            return jsonify({'error': f'Missing field: {str(e)}'}), 400
+            error_msg = f'Missing field: {str(e)}'
+            return jsonify({'error': error_msg}), 400
+
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+
+    def update_event(event_id: str, data: Dict[str, Any]):
+        """
+            Atualiza um evento existente com base no ID e nos dados fornecidos.
+
+            Essa função reconstrói o objeto de dados do evento, garantindo que os dados
+            do organizador sejam mantidos em um único campo "organizer", evitando criar
+            novos campos para as informações do organizador.
+
+            Args:
+                event_id (str): ID do evento a ser atualizado.
+                data (Dict[str, Any]): Dados atualizados do evento recebidos via JSON.
+
+            Returns:
+                Response: Objeto Flask Response contendo o ID do evento atualizado e o status HTTP 200,
+                          ou uma mensagem de erro e o status HTTP correspondente.
+        """
+        try:
+            # Reconstrói os dados do evento para manter o formato consistente
+            event_data = FlowController.event_data_build(data)
+
+            reservation_manager = ReservationManager()
+            updated_event_id = reservation_manager.update_event(event_id, event_data)
+            return jsonify({"eventId": updated_event_id}), 200
+
+        except KeyError as e:
+            error_msg = f'Missing field: {str(e)}'
+            return jsonify({'error': error_msg}), 400
+
+        except Exception as e:
+            return jsonify({'error': 'An error occurred while updating the event'}), 500
+
+
+    def event_data_build(data: Dict[str, Any]):
+        """
+            Constrói o objeto de dados do evento com base nos dados recebidos.
+
+            Essa função extrai informações essenciais, como dados do organizador, e monta
+            um dicionário com o formato esperado para armazenamento, garantindo que os dados
+            do organizador fiquem concentrados no campo "organizer".
+
+            Args:
+                data (Dict[str, Any]): Dados brutos do evento recebidos via JSON.
+
+            Returns:
+                dict: Dicionário contendo os dados formatados do evento.
+
+            Raises:
+                ValueError: Se o campo "userEmail" estiver ausente.
+        """
+        teacher_email = data.get("userEmail")
+        if not teacher_email:
+            raise ValueError("User email is required")
+        teacher_phone = data.get("telefone", "")
+        teacher_name = teacher_email.split("@")[0]
+        organizer = {
+            "name": teacher_name,
+            "email": teacher_email,
+            "phone": teacher_phone
+        }
+        return {
+            "name": data.get("tituloEvento", ""),
+            "organizer": organizer,
+            "eventTypeId": data.get("classificacao", ""),
+            "odsId": data.get("odsId", ""),
+            "subscriptionLink": "",
+            "description": data.get("descricaoEvento", ""),
+            "graduationId": data.get("courseId", ""),
+            "targetPublic": data.get("publicoAlvo", ""),
+            "resources": data.get("recursosNecessarios", ""),
+            "expectedSubscribers": data.get("numeroParticipantes", ""),
+            "roomType": data.get("espacos", ""),
+            "entrepreneuralPath": data.get("trilhaDesc", ""),
+            "extensionProject": data.get("projetoDesc", ""),
+            "studentsMonitors": data.get("alunosMonitores", ""),
+            "eventLogo": "",
+            "status": data.get("status", "requested"),
+        }

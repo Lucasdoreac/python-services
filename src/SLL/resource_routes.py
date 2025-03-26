@@ -63,6 +63,18 @@ class ResourcesRoutes:
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+    @staticmethod
+    @resources_bp.route('/rooms', methods=['GET'])
+    @token_required
+    def get_rooms_by_id():
+        try:
+            room_id = request.args.get("roomId")
+            room_obj = FlowController.find_room_by_id(room_id)
+            return room_obj, 200
+        except Exception as e:
+            return jsonify({"error": str(e)})
+
+
 
     @staticmethod
     @resources_bp.route('/campus',methods = ['GET'])
