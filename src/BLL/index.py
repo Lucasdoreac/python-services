@@ -2,10 +2,12 @@ import os
 from typing import Any, Dict
 
 import requests
-from flask import request, jsonify
+from flask import jsonify
 from datetime import datetime, timedelta
 from DAL import *
 from DAL.collections_repositories import EventsRepository
+from sr_requests_module.request_methods import GetRequestMethods
+
 
 # Initialize repository instances
 university_repository = UniversityRepository()
@@ -146,10 +148,10 @@ class FlowController:
         """
             Busca todas as salas cadastradas no shared-resources, utilizando paginação.
         """
-        url = f"{os.getenv('URL_restapi')}/rooms"
-        response = requests.get(url, params={"page": page, "page_size": page_size})
-        if response.status_code != 200:
-            raise Exception("Erro ao buscar salas do shared-resources")
+        url = GetRequestMethods.generate_url("/rooms")
+        response = GetRequestMethods.get_request_page(url, page, page_size)
+        #if response.status_code != 200:
+       #     raise Exception("Erro ao buscar salas do shared-resources")
 
         rooms_json = response.json()
         # Se a resposta possuir paginação, os dados estarão no campo "data"
