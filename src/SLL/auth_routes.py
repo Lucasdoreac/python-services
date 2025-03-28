@@ -19,7 +19,8 @@ class AuthRoutes:
     def auth_mail():
         authentication_controller = AuthenticationController()
         email = request.args.get('email')
-        if not email.endswith('@udf.edu.br'):
+        allowed_emails = ["danrley.pereira@cs.udf.edu.br"]
+        if not (email.endswith('@udf.edu.br') or email in allowed_emails):
             AppLogger.log(
                 Logmessage.INVALID_EMAIL_DOMAIN,
                 LogType.INFO,

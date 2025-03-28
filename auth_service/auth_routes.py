@@ -1,10 +1,9 @@
 import os
 from functools import wraps
-from http.client import responses
 
 import requests
 from flasgger import swag_from
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, render_template
 from auth_service.controller import AuthenticationController
 from auth_service.swagger_docs import get_swagger_specification
 
@@ -34,26 +33,32 @@ def token_required(f):
             return jsonify({"message": "Invalid or missing token"}), 403
     return decorated_function
 
+
 def send_magic_link(email, username, magic_link):
-
     """
-        Envia um email com um magic link para login via função na nuvem.
+    Sends an email with a magic link for login.
 
-        Args:
-            email (str): Email do destinatário.
-            username (str): Nome do usuário.
-            magic_link (str): Link que será enviado para autenticação.
+    Args:
+        email (str): Recipient's email address.
+        username (str): The user’s name.
+        magic_link (str): The authentication link.
 
-        Returns:
-            Response: Resposta da requisição HTTP para envio do email.
-        """
+    Returns:
+        Response: HTTP response from the email sending service.
+    """
+    # Render the HTML template with dynamic data
+    minio_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/magic-link.png"
+    html_content = render_template('email/magic_link.html',
+                                   username=username,
+                                   magic_link=magic_link,
+                                   minio_icon_url=minio_icon_url)
 
-    url = f"{os.getenv('CLOUD_FUNCTION_URL')}/send_email"
+    url = f"{os.getenv('CLOUD_FUNCTION_URL')}/send-email"
     payload = {
-        'subject': 'Login Authorization',
-        'content': f"Hello {username}, use this link to login: {magic_link}",
+        'subject': 'Autorização de Acesso',
+        'content': html_content,
         'to': [email],
-        'is_html': False
+        'is_html': True
     }
     headers = {
         'X-API-Key': os.getenv('CLOUD_FUNCTION_API_KEY'),
@@ -69,7 +74,6 @@ class AuthRoutes:
     @auth_bp.route('/auth/send-link', methods=['POST'])
     @swag_from(get_swagger_specification('auth', 'POST'))
     def auth_mail():
-
         """
                 Endpoint para envio de magic link via email.
 
@@ -83,7 +87,8 @@ class AuthRoutes:
         # inject controller
         authentication_controller = AuthenticationController()
         email = request.args.get('email')
-        if not email.endswith('@udf.edu.br'):
+        allowed_emails = ["danrley.pereira@cs.udf.edu.br"]
+        if not (email.endswith('@udf.edu.br') or email in allowed_emails):
             return jsonify({'error': 'Invalid email domain'}), 400
 
         # Generate hash via the controller

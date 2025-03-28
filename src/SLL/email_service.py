@@ -4,7 +4,7 @@ import requests
 
 def send_magic_link(email, username, magic_link):
     """ Sends a magic link email via the cloud function. """
-    url = f"{os.getenv('CLOUD_FUNCTION_URL')}/send_email"
+    url = f"{os.getenv('CLOUD_FUNCTION_URL')}/send-email"
     payload = {
         'subject': 'Login Authorization',
         'content': f"Hello {username}, use this link to login: {magic_link}",
