@@ -3,7 +3,7 @@ from flasgger import swag_from
 from datetime import date,datetime
 from .swagger_docs import get_swagger_specification
 from .auth_decorators import token_required
-from BLL import FlowController
+from BLL import FlowController, pdf
 from SLL.py_log import AppLogger,LogType,Logmessage
 
 
@@ -24,7 +24,18 @@ class ReservationRoutes:
                 ip_address=request.remote_addr,
             )
             return jsonify({'error': 'Missing date'}), 400
-        return FlowController.register_reservation_from_json(data)
+       # return FlowController.register_reservation_from_json(data)
+        result = FlowController.register_reservation_from_json(data)
+
+        try:
+            pdf.generate_event_pdf(event_id=data['eventId'])
+        except Exception as e:
+            AppLogger.log(
+                f"Erro ao gerar PDF do evento {data['eventId']}: {e}",
+                LogType.ERROR,
+                ip_address=request.remote_addr,
+            )
+        return result
 
     @staticmethod
     @reservation_bp.route('/reservations/<string:date>', methods=['GET'])

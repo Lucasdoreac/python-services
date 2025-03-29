@@ -32,6 +32,10 @@ class FlowController:
     def find_reservation_by_event_id(event_id):
         return reservations_repository.find_all({"eventId": event_id})
 
+    @staticmethod
+    def find_event_by_event_id(event_id: str):
+        return events_repository.find_by_id(event_id)
+
 
     def find_type_by_collection(collection: str):
         type_data = types_repository.get_type_by_collection(collection)
@@ -56,10 +60,9 @@ class FlowController:
                       ou mensagem de erro e o status HTTP correspondente.
         """
         try:
-            reservation_info = data["roomId"]
-            event_id = reservation_info["eventId"]
-            reservation_date_str = reservation_info["reservationDate"]
-            room_id = reservation_info["roomId"]
+            event_id = data["eventId"]
+            reservation_date_str = data["reservationDate"]
+            room_id = data["roomId"]
 
             reservation_date = datetime.strptime(reservation_date_str, "%Y-%m-%dT%H:%M:%S.%fZ")
 
@@ -158,6 +161,26 @@ class FlowController:
         all_rooms = rooms_json.get("data", rooms_json)
         pagination_config = rooms_json.get("pagination", {})
         return all_rooms, pagination_config
+
+    def find_types_by_collection(collection: str):
+        """
+            Busca os tipos cadastrados no shared-resources com base na coleção.
+            :param collection: Nome da coleção a ser buscada.
+            :return: JSON com os dados dos tipos ou mensagem de erro.
+            """
+        try:
+            url_base = os.getenv('URL_restapi')
+            url = f"{url_base}/types/?collection_name={collection}"
+
+            response = requests.get(url)
+            response.raise_for_status()
+            data = response.json()
+            types = [types_item for item in data for types_item in item.get('types', [])]
+            if types:
+                return {'types': types}
+            return jsonify({'error': "Type not found"}), 404
+        except Exception as e:
+            return jsonify({'error': f"An error ocucred: {str(e)}"}), 400
 
 
     def create_event(data: Dict[str, Any]):

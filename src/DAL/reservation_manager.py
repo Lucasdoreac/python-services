@@ -13,6 +13,7 @@ class ReservationManager:
         self.rooms_collection = self.db.rooms
         self.buildings_collection = self.db.buildings
         self.events_collection = self.db.events
+        self.pdfs_collection = self.db.pdfs
 
     def insert_reservation(self, room_id, event_id, date, start_time, end_time):
         """
@@ -125,5 +126,19 @@ class ReservationManager:
             else:
                 # Se nenhum documento foi modificado, pode significar que os dados são idênticos
                 return event_id
+        except Exception as e:
+            raise e
+
+    def insert_pdf(self, pdf_data):
+        try:
+            existing = self.pdfs_collection.find_one({"path": pdf_data.get("path")})
+
+            if existing:
+                self.pdfs_collection.replace_one({"_id": existing["_id"]}, pdf_data)
+                return str(existing["_id"])
+            else:
+                result = self.pdfs_collection.insert_one(pdf_data)
+                return str(result.inserted_id)
+
         except Exception as e:
             raise e

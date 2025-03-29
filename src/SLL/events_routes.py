@@ -1,9 +1,10 @@
 from flask import Blueprint, jsonify, request
 from flasgger import swag_from
 from .swagger_docs import get_swagger_specification
-from BLL import FlowController
+from BLL import FlowController,pdf
 from .auth_decorators import token_required
 from SLL.py_log import AppLogger,LogType,Logmessage
+
 
 # Define your Flask Blueprint
 events_bp = Blueprint('events', __name__)
@@ -16,7 +17,6 @@ class EventsRoutes:
     @swag_from(get_swagger_specification(path='events', method='POST'))
     def post_event():
         """
-
             Endpoint para criação de um novo evento.
 
             Obtém os dados JSON do request, extrai o email do usuário a partir dos headers,
@@ -37,7 +37,20 @@ class EventsRoutes:
                 ip_address=request.remote_addr,
             )
             return jsonify({'error': 'Missing data'}), 400
-        return FlowController.create_event(data)
+        id_event_response = FlowController.create_event(data)
+
+        # Se id_event_response for uma tupla ou tiver o método get_json, extraia o valor:
+        if isinstance(id_event_response, tuple):
+            response_obj = id_event_response[0]
+        else:
+            response_obj = id_event_response
+
+        # Se id_event_response for uma tupla ou tiver o método get_json, extraia o valor:
+        id_event = response_obj.get_json().get('eventId') if hasattr(response_obj, 'get_json') else id_event_response
+
+        if data['status'] == 'requested':
+            pdf.generate_event_pdf(id_event,data)
+        return  jsonify({'eventId': id_event})
 
     @staticmethod
     @events_bp.route('/events', methods=['GET'])
