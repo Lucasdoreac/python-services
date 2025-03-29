@@ -116,28 +116,33 @@ class ResourcesRoutes:
         )
         return jsonify({'error': "Campus not found"}), 404
 
-
     @staticmethod
-    @resources_bp.route('/courses',methods=['GET'])
+    @resources_bp.route('/courses', methods=['GET'])
     @token_required
-    @swag_from(get_swagger_specification(path='courses',method='GET'))
+    @swag_from(get_swagger_specification(path='courses', method='GET'))
     def get_courses():
         try:
-
             course_name = request.args.get('course_name')
+            course_id = request.args.get('course_id')
             url = f"{os.getenv('URL_restapi')}/courses/"
 
-            if course_name:
+            if course_id:
+                url += f"?course_id={course_id}"
+            elif course_name:
                 url += f"?course_name={course_name}"
 
             response = requests.get(url)
             response.raise_for_status()
 
             data = response.json()
+            if course_id:
+                return jsonify({'courses': data}), 200
+
             courses = data.get("data", [])
 
             if courses:
-                return jsonify({'courses':courses}),200
+                return jsonify({'courses': courses}), 200
+
             AppLogger.log(
                 Logmessage.COURSES_NOT_FOUND,
                 LogType.INFO,
@@ -151,7 +156,6 @@ class ResourcesRoutes:
         except ValueError:
             # Handle invalid JSON responses
             return jsonify({'error': 'Invalid JSON response from external API.'}), 500
-
 
     @staticmethod
     @resources_bp.route('/disciplines', methods=['GET'])

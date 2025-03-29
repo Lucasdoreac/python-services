@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <title>Evento - Status</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f9f9f9;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+            background: #fff;
+            border: 1px solid #ddd;
+            padding: 20px;
+            text-align: center;
+        }
+        .header {
+            background: #0D5580;
+            color: #fff;
+            padding: 10px;
+            margin: -20px -20px 20px;
+        }
+        .header h1 {
+            margin: 0;
+        }
+        .icon {
+            margin: 20px 0;
+        }
+        .pdf-icon {
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <!-- Conditional Title -->
+            <h1>
+                {% if is_approved %}
+                    Evento Aprovado
+                {% else %}
+                    Evento Não Aprovado
+                {% endif %}
+            </h1>
+        </div>
+
+        <h2>Olá {{ username }}</h2>
+
+        <!-- Conditional message -->
+        <p>
+            {% if is_approved %}
+                Legal, seu evento foi aprovado!
+            {% else %}
+                Infelizmente seu evento não foi aprovado.
+            {% endif %}
+        </p>
+
+        <!-- Conditional status icon (approved or denied) -->
+        <div class="icon">
+            {% if is_approved %}
+                <img src="{{ approved_icon_url }}" alt="Approved" width="120" />
+            {% else %}
+                <img src="{{ denied_icon_url }}" alt="Denied" width="120" />
+            {% endif %}
+        </div>
+
+        <!-- PDF icon (always shown, or show only if you have a PDF link) -->
+        <div class="pdf-icon">
+            <img src="{{ pdf_icon_url }}" alt="PDF Icon" width="60" />
+        </div>
+    </div>
+</body>
+</html>

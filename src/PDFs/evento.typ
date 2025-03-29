@@ -5,7 +5,7 @@
   size: 14pt
 )
 #align(center)[
-  = "Seminário de Inovação"
+  = "Fizz Buzz Kata"
 ]
 
 #align(center)[
@@ -52,9 +52,9 @@
 
 #table(
   columns: 2,
-  [Responsável:], [`gabriel`],
-  [E-mail do Responsável:], [`gabriel@udf.edu.br`],
-  [Telefone:], [`987654321`],
+  [Responsável:], [`danrley.pereira`],
+  [E-mail do Responsável:], [`danrley.pereira@cs.udf.edu.br`],
+  [Telefone:], [`(61) 9 8463-0170`],
 )
 
 #set table(
@@ -99,19 +99,19 @@
 
 #table(
   columns: 2,
-  [Tipo de Evento:], [`Seminário`],
-  [ODS:], [`Indústria, Inovação e Infraestrutura`],
-  [Descrição:], [`Um evento sobre inovação e tecnologia.`],
-  [Curso:], [`Engenharia de Software`],
-  [Público Alvo:], [`Estudantes e profissionais`],
-  [Recursos Necessários:], [`Projetor, Computadores`],
-  [Número de Participantes Esperados:], [`150`],
-  [Sala:], [`Auditório Principal`],
-  [Trilha Empreendedora:], [`Inovação Tecnológica`],
-  [Projeto de Extensão:], [`Projeto de Pesquisa`],
-  [Alunos Monitores:], [`João, Maria`],
-  [Data:],[`30/09/2025`],
-  [Horário de inicio:],[`19:00`],
-  [Horário final:],[`21:00`],   
+  [Tipo de Evento:], [`workshop`],
+  [ODS:], [`Educação de qualidade`],
+  [Descrição:], [`TDD e Pair Programming para resolver o Kata`],
+  [Curso:], [`71`],
+  [Público Alvo:], [`['alunosUDF']`],
+  [Recursos Necessários:], [`['tecnologias']`],
+  [Número de Participantes Esperados:], [`12`],
+  [Sala:], [`laboratorioInformática`],
+  [Trilha Empreendedora:], [`Não associado a trilha empreendedora`],
+  [Projeto de Extensão:], [`PIBIT - LabTech`],
+  [Alunos Monitores:], [`['Gabriel', 'Valeria']`],
+  [Data:],[`29/03/2025`],
+  [Horário de inicio:],[`21:37`],
+  [Horário final:],[`23:37`],   
 )
     

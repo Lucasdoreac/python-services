@@ -276,7 +276,8 @@ def save_pdf(event_id):
         )
 
         pdf_data ={
-            "path":f"dwcorp.com.br:9000/{bucket_name}/{object_name}"
+            "path":f"dwcorp.com.br:9000/{bucket_name}/{object_name}",
+            "eventId": event_id,
         }
 
         reservation_manager = ReservationManager()

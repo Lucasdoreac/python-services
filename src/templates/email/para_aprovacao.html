@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <title>Evento para Aprovação</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f9f9f9;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+            background: #fff;
+            border: 1px solid #ddd;
+            padding: 20px;
+            text-align: center;
+        }
+        .header {
+            background: #0D5580;
+            color: #fff;
+            padding: 10px;
+            margin: -20px -20px 20px;
+        }
+        .header h1 {
+            margin: 0;
+        }
+        .button {
+            text-decoration: none;
+            margin: 0 5px;
+        }
+        .button img {
+            vertical-align: middle;
+            border: none;
+        }
+        .icon {
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Evento para Aprovação</h1>
+        </div>
+        <h2>Olá {{ user_type }}</h2>
+        <p>O evento com os dados abaixo:</p>
+
+        <!-- PDF icon -->
+        <div class="icon">
+            <img src="{{ pdf_icon_url }}" alt="PDF Icon" width="70" />
+        </div>
+
+        <!-- Request Changes button (optional) -->
+        {% if request_changes_link %}
+            <p>
+                <a class="button" href="{{ request_changes_link }}">
+                    <img src="{{ request_changes_icon_url }}" alt="Request Changes" width="150" />
+                </a>
+            </p>
+        {% endif %}
+
+        <!-- Reject and Approve buttons -->
+        <p>
+            <a class="button" href="{{ reject_link }}">
+                <img src="{{ reject_icon_url }}" alt="Rejected" width="120" />
+            </a>
+            <a class="button" href="{{ approve_link }}">
+                <img src="{{ approve_icon_url }}" alt="Approved" width="120" />
+            </a>
+        </p>
+    </div>
+</body>
+</html>

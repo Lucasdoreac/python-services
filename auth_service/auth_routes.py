@@ -127,7 +127,6 @@ class AuthRoutes:
     @token_required
     @swag_from(get_swagger_specification(path='auth', method='GET'))
     def validate_hash():
-
         """
                 Endpoint para validação do token.
 
