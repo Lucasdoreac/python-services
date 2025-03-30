@@ -245,6 +245,8 @@ def generate_event_pdf(event_id,data: Dict[str, Any] = None):
 
 def save_pdf(event_id):
     MINIO_URL = f"{os.getenv('MINIO_URL')}"
+    if '//' in MINIO_URL:
+        MINIO_URL = MINIO_URL.split('//', 1)[1]
     ACCESS_KEY = f"{os.getenv('MINIO_ACCESS_KEY')}"
     SECRET_KEY = f"{os.getenv('MINIO_SECRET_KEY')}"
 

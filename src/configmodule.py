@@ -14,6 +14,8 @@ class Config:
     MONGO_HOST = os.getenv("MONGO_HOST")
     MONGO_PASSWORD = os.getenv("MONGO_PASSWORD")
     MONGO_USERNAME = os.getenv("MONGO_USERNAME")
+    SERVER_NAME = os.getenv("SERVER_NAME", "localhost:5000")
+    SERVER_SCHEME = os.getenv("SERVER_SCHEME", "http")
 
     # MongoDB URI setup
     MONGO_URI = f"mongodb+srv://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}/"
@@ -28,6 +30,7 @@ class DevelopmentConfig(Config):
 
 class ProductionConfig(Config):
     SESSION_COOKIE_SECURE = True
+    PREFERRED_URL_SCHEME = "http"
     SERVER_HOST = "0.0.0.0"
     SERVER_PORT = 8000
 

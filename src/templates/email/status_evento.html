@@ -33,6 +33,10 @@
         .pdf-icon {
             margin-top: 30px;
         }
+        .action-info {
+            font-size: 16px;
+            margin: 10px 0;
+        }
     </style>
 </head>
 <body>
@@ -59,6 +63,17 @@
             {% endif %}
         </p>
 
+        <!-- Display who approved or rejected the event -->
+        {% if who %}
+            <p class="action-info">
+                {% if is_approved %}
+                    Aprovado por: <strong>{{ who }}</strong>
+                {% else %}
+                    Rejeitado por: <strong>{{ who }}</strong>
+                {% endif %}
+            </p>
+        {% endif %}
+
         <!-- Conditional status icon (approved or denied) -->
         <div class="icon">
             {% if is_approved %}
@@ -68,9 +83,11 @@
             {% endif %}
         </div>
 
-        <!-- PDF icon (always shown, or show only if you have a PDF link) -->
+        <!-- PDF icon (always shown) -->
         <div class="pdf-icon">
-            <img src="{{ pdf_icon_url }}" alt="PDF Icon" width="60" />
+            <a href="{{ pdf_link }}" target="_blank">
+                <img src="{{ pdf_icon_url }}" alt="PDF Icon" width="70" />
+            </a>
         </div>
     </div>
 </body>

@@ -1,9 +1,10 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, make_response
 from flasgger import swag_from
 from .swagger_docs import get_swagger_specification
 from BLL import FlowController,pdf
 from .auth_decorators import token_required
 from SLL.py_log import AppLogger,LogType,Logmessage
+from BLL import send_to_coordenacao
 
 
 # Define your Flask Blueprint
@@ -48,8 +49,6 @@ class EventsRoutes:
         # Se id_event_response for uma tupla ou tiver o método get_json, extraia o valor:
         id_event = response_obj.get_json().get('eventId') if hasattr(response_obj, 'get_json') else id_event_response
 
-        if data['status'] == 'requested':
-            pdf.generate_event_pdf(id_event,data)
         return  jsonify({'eventId': id_event})
 
     @staticmethod
@@ -119,4 +118,20 @@ class EventsRoutes:
 
         data['userEmail'] = user_email
 
-        return FlowController.update_event(event_id, data)
+        result = FlowController.update_event(event_id, data)
+
+        try:
+            if data['status'] == 'requested':
+                pdf.generate_event_pdf(event_id=data['eventId'])
+                send_to_coordenacao(event_id=data['eventId'])
+        except Exception as e:
+            AppLogger.log(
+                f"Erro ao gerar PDF do evento {data['eventId']}: {e}",
+                LogType.ERROR,
+                ip_address=request.remote_addr,
+            )
+
+        response = make_response(result)
+        response.headers['Cache-Control'] = 'no-cache, no-store'
+        response.headers['Pragma'] = 'no-cache'
+        return response

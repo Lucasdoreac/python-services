@@ -24,18 +24,7 @@ class ReservationRoutes:
                 ip_address=request.remote_addr,
             )
             return jsonify({'error': 'Missing date'}), 400
-       # return FlowController.register_reservation_from_json(data)
-        result = FlowController.register_reservation_from_json(data)
-
-        try:
-            pdf.generate_event_pdf(event_id=data['eventId'])
-        except Exception as e:
-            AppLogger.log(
-                f"Erro ao gerar PDF do evento {data['eventId']}: {e}",
-                LogType.ERROR,
-                ip_address=request.remote_addr,
-            )
-        return result
+        return FlowController.register_reservation_from_json(data)
 
     @staticmethod
     @reservation_bp.route('/reservations/<string:date>', methods=['GET'])

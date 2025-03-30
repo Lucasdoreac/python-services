@@ -22,6 +22,7 @@ def create_app(config_class):
     from .events_routes import events_bp
     from .types_routes import types_bp
     from .resource_routes import resources_bp
+    from .administration_approval import templates_bp
     
     # Blueprints register
     app.register_blueprint(auth_bp)
@@ -29,6 +30,7 @@ def create_app(config_class):
     app.register_blueprint(events_bp)
     app.register_blueprint(types_bp)
     app.register_blueprint(resources_bp)
+    app.register_blueprint(templates_bp)
 
     # Health check
     @app.route('/health', methods=['GET'])
