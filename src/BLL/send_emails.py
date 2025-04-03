@@ -3,10 +3,17 @@ import requests
 from flask import render_template, current_app, url_for
 from .index import FlowController
 
-emails = {
-    "reitoria": ["danrleywillian@gmail.com", "guilherme.amaral2004@gmail.com"],
-    "coordenacao": ["dwcorpbrasil@gmail.com", "danrley.pereira@cs.udf.edu.br"]
-}
+if os.getenv("FLASK_ENV") == "development":
+    emails = {
+        "reitoria": ["danrleywillian@gmail.com", "guilherme.amaral2004@gmail.com"],
+        "coordenacao": ["dwcorpbrasil@gmail.com", "danrley.pereira@cs.udf.edu.br"]
+    }
+else:
+    emails = {
+        "reitoria": ["suelaine.santos@udf.edu.br"],
+        "coordenacao": [],
+        "reservas": ["bruno.silva@udf.edu.br"]
+    }
 
 
 def send_to_coordenacao(event_id):
