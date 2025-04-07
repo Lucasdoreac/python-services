@@ -5,7 +5,7 @@
   size: 14pt
 )
 #align(center)[
-  = "Fizz Buzz Kata"
+  = "Testando Aplicação"
 ]
 
 #align(center)[
@@ -52,9 +52,9 @@
 
 #table(
   columns: 2,
-  [Responsável:], [`danrley.pereira`],
-  [E-mail do Responsável:], [`danrley.pereira@cs.udf.edu.br`],
-  [Telefone:], [`(61) 9 8463-0170`],
+  [Responsável:], [`gabrielOF`],
+  [E-mail do Responsável:], [`gabrielOF@udf.edu.br`],
+  [Telefone:], [`(61) 9 8922-0022`],
 )
 
 #set table(
@@ -99,19 +99,19 @@
 
 #table(
   columns: 2,
-  [Tipo de Evento:], [`workshop`],
-  [ODS:], [`Educação de qualidade`],
-  [Descrição:], [`TDD e Pair Programming para resolver o Kata`],
-  [Curso:], [`71`],
+  [Tipo de Evento:], [`exam`],
+  [ODS:], [`Vida terrestre`],
+  [Descrição:], [`Testar Descrição do evento/ Objetivos,Descrição do evento/ Objetivos`],
+  [Curso:], [`31`],
   [Público Alvo:], [`['alunosUDF']`],
   [Recursos Necessários:], [`['tecnologias']`],
-  [Número de Participantes Esperados:], [`12`],
-  [Sala:], [`laboratorioInformática`],
+  [Número de Participantes Esperados:], [`10`],
+  [Sala:], [`auditorio`],
   [Trilha Empreendedora:], [`Não associado a trilha empreendedora`],
-  [Projeto de Extensão:], [`PIBIT - LabTech`],
-  [Alunos Monitores:], [`['Gabriel', 'Valeria']`],
-  [Data:],[`29/03/2025`],
-  [Horário de inicio:],[`21:37`],
-  [Horário final:],[`23:37`],   
+  [Projeto de Extensão:], [`Não`],
+  [Alunos Monitores:], [`Sem alunos monitores`],
+  [Data:],[`02/04/2025`],
+  [Horário de inicio:],[`01:41`],
+  [Horário final:],[`03:41`],   
 )
     

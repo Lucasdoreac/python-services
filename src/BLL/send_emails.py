@@ -1,7 +1,14 @@
 import os
+from datetime import datetime
+from hashlib import sha256
+from DAL.collections_repositories import SendEmailrepository
 import requests
 from flask import render_template, current_app, url_for
-from .index import FlowController
+from DAL import ReservationManager
+from SLL import AppLogger, Logmessage, LogType
+from .index import events_repository
+from BLL.enums import EmailStep, EventStatus
+
 
 if os.getenv("FLASK_ENV") == "development":
     emails = {
@@ -15,7 +22,6 @@ else:
         "reservas": ["bruno.silva@udf.edu.br"]
     }
 
-
 def send_to_coordenacao(event_id):
     """
     Sends an email to Coordenação for event approval.
@@ -27,6 +33,8 @@ def send_to_coordenacao(event_id):
     Returns:
         Response: HTTP response from the email sending service.
     """
+    #crair email token de uso UNICO(so desativa token quando a acao for tomada ex: approve,rejected or requested change)
+    tokenId = create_send_email_token(event_id, step=EmailStep.COORDENACAO)
     # MinIO icon URLs (adjust paths as needed)
     pdf_link = f"{os.getenv('MINIO_URL')}/labtech/reservation-pdfs/{event_id}.pdf"
     pdf_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/pdf.png"
@@ -36,9 +44,9 @@ def send_to_coordenacao(event_id):
 
     # Example links (adjust to your routes)
     with current_app.test_request_context():
-        request_changes_link = url_for('templates_bp.request_changes', eventId=event_id, tokenId='tokenId', _external=True)
-        approve_link = url_for('templates_bp.approve', eventId=event_id, tokenId='tokenId', who='coordenacao', _external=True)
-        reject_link = url_for('templates_bp.reject', eventId=event_id, tokenId='tokenId', who='coordenacao', _external=True)
+        request_changes_link = url_for('templates_bp.request_changes', eventId=event_id, tokenId=tokenId, _external=True)
+        approve_link = url_for('templates_bp.approve', eventId=event_id, tokenId=tokenId, who='coordenacao', _external=True)
+        reject_link = url_for('templates_bp.reject', eventId=event_id, tokenId=tokenId, who='coordenacao', _external=True)
 
     # Render the template with the appropriate data
     html_content = render_template(
@@ -69,10 +77,9 @@ def send_to_coordenacao(event_id):
         'Content-Type': 'application/json'
     }
 
+    AppLogger.log(Logmessage.SENDING_EMAIL, LogType.INFO, email=emails["coordenacao"], event=event_id, token=tokenId)
     # Send the request to your cloud function
-    response = requests.post(url, json=payload, headers=headers)
-    return response
-
+    return requests.post(url, json=payload, headers=headers)
 
 def send_to_reitoria(event_id):
     """
@@ -85,6 +92,9 @@ def send_to_reitoria(event_id):
     Returns:
         Response: HTTP response from the email sending service.
     """
+    # crair email token de uso UNICO(so desativa token quando a acao for tomada ex: approve,rejected or requested change)
+    tokenId = create_send_email_token(event_id, step=EmailStep.REITORIA)
+
     # MinIO icon URLs (adjust paths as needed)
     pdf_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/pdf.png"
     request_changes_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/request-changes.png"
@@ -95,8 +105,8 @@ def send_to_reitoria(event_id):
     # Maybe Reitoria doesn't need a 'request changes' link. You can omit or include it as needed.
     request_changes_link = None
     with current_app.test_request_context():
-        approve_link = url_for('templates_bp.approve', eventId=event_id, tokenId='tokenId', who='reitoria', _external=True)
-        reject_link = url_for('templates_bp.reject', eventId=event_id, tokenId='tokenId', who='reitoria', _external=True)
+        approve_link = url_for('templates_bp.approve', eventId=event_id, tokenId=tokenId, who='reitoria', _external=True)
+        reject_link = url_for('templates_bp.reject', eventId=event_id, tokenId=tokenId, who='reitoria', _external=True)
 
     # Render the template with the appropriate data
     html_content = render_template(
@@ -127,11 +137,12 @@ def send_to_reitoria(event_id):
         'Content-Type': 'application/json'
     }
 
+    AppLogger.log(Logmessage.SENDING_EMAIL, LogType.INFO, email=emails["reitoria"], event=event_id, token=tokenId)
     # Send the request to your cloud function
     response = requests.post(url, json=payload, headers=headers)
     return response
 
-def send_event_status(event_id, is_approved: bool, who: str):
+def send_event_status(event_id, is_approved: bool, who: str, token:str):
     """
     Sends an email to inform the user if the event was approved or denied.
 
@@ -144,8 +155,36 @@ def send_event_status(event_id, is_approved: bool, who: str):
     Returns:
         Response: HTTP response from the email sending service.
     """
-    event = FlowController.find_event_by_event_id(event_id)
+    AppLogger.log(
+        Logmessage.EVENT_APPROVED_REJECTED_BY,
+        LogType.INFO,
+        event_id=event_id,
+        action='approved' if is_approved else 'rejected',
+        who=who,
+        token=token)
+    event_status = ""
+    if is_approved:
+        if who == 'coordenacao':
+            apply_token_action(0, 'approved', event_id, token)
+            event_status = EventStatus.APPROVED_BY_COORDENACAO.value
+        else:
+            apply_token_action(1, 'approved', event_id, token)
+            event_status = EventStatus.APPROVED_BY_REITORIA.value
+    else:
+        if who == 'coordenacao':
+            apply_token_action(0, 'rejected', event_id, token)
+            event_status = EventStatus.REJECTED_BY_COORDENACAO.value
+        else:
+            apply_token_action(1, 'rejected', event_id, token)
+            event_status = EventStatus.REJECTED_BY_REITORIA.value
+
+    event = events_repository.find_by_id(event_id)
     email = event["organizer"]["email"]
+    event.pop("_id", None)
+    event["status"] = event_status
+    # update event status
+    reservation_manager = ReservationManager()
+    reservation_manager.update_event(event_id, event_data=event)
     # MinIO icon URLs (adjust paths if needed)
     pdf_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/pdf.png"
     approved_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/approved.png"
@@ -184,3 +223,43 @@ def send_event_status(event_id, is_approved: bool, who: str):
     # Send the request to your cloud function
     response = requests.post(url, json=payload, headers=headers)
     return response
+
+def verify_token_from_email(tokenId) -> bool:
+    data = find_send_email_by_token_id(tokenId)
+
+    for record in data:
+        if tokenId == record.get("tokenId") and record.get("active") is True:
+            return True
+        return False
+
+def apply_token_action(step: int, action:str, eventId:str, tokenId: str) -> None:
+    query = {
+        'eventId': eventId,
+        'step': step,
+        'tokenId': tokenId,
+    }
+
+    new_values = {
+        '$set': {
+            'step': step,
+            'active': False,
+            'action': action,
+            'update_at': datetime.now()  # Atualiza o timestamp de modificação
+        }
+    }
+
+    send_email_repository.update_one(query, new_values)
+    
+
+send_email_repository = SendEmailrepository()
+
+def find_send_email_by_token_id(tokenId: str):
+    return send_email_repository.find_all({"tokenId": tokenId})
+
+def create_send_email_token(event_id: str,step: EmailStep)-> str:
+    now = datetime.now()
+    tokenId = sha256(str(now).encode()).hexdigest()
+    reservation_manager = ReservationManager()
+    reservation_manager.insert_send_email(tokenId, step.value, event_id)
+    return tokenId
+

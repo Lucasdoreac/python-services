@@ -1,8 +1,7 @@
+from enum import Enum
 from typing import Dict, Any
-
 from .mongodb_factory import MongoDBConnectionFactory
 from datetime import datetime
-from bson import ObjectId
 
 
 class ReservationManager:
@@ -14,6 +13,7 @@ class ReservationManager:
         self.buildings_collection = self.db.buildings
         self.events_collection = self.db.events
         self.pdfs_collection = self.db.pdfs
+        self.send_email_collection = self.db.send_email
 
     def insert_reservation(self, room_id, event_id, date, start_time, end_time):
         """
@@ -142,3 +142,16 @@ class ReservationManager:
 
         except Exception as e:
             raise e
+
+    def insert_send_email(self,token,step,eventId):
+        document = {
+            'tokenId': token,
+            'step':int(step),
+            'eventId':eventId,
+            'created_at': datetime.now(),
+            'active': True,
+            'update_at': datetime.now(),
+            'action' : 'waiting'
+        }
+        result = self.send_email_collection.insert_one(document)
+        return str(result.inserted_id)

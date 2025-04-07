@@ -1,8 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
-
 from bson import ObjectId
-
 from .mongodb_factory import MongoDBConnectionFactory
 
 

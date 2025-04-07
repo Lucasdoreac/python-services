@@ -11,6 +11,14 @@ class BuildingsRepository(BaseRepository):
     def get_collection_name(self):
         return self.db["buildings"]
 
+class SendEmailrepository(BaseRepository):
+    def get_collection_name(self):
+        return self.db.send_email
+
+    def update_one(self, query, updated_fields):
+        collection = self.get_collection_name()
+        return collection.update_one(query, updated_fields)
+
 
 class RoomsRepository(BaseRepository):
     def get_collection_name(self):

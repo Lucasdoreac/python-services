@@ -1,6 +1,5 @@
 import os
 from typing import Any, Dict
-
 import requests
 from flask import jsonify
 from datetime import datetime, timedelta
@@ -35,7 +34,6 @@ class FlowController:
     @staticmethod
     def find_event_by_event_id(event_id: str):
         return events_repository.find_by_id(event_id)
-
 
     def find_type_by_collection(collection: str):
         type_data = types_repository.get_type_by_collection(collection)
