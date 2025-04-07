@@ -1,7 +1,6 @@
 import os
 from flask import request
 import requests
-from pycparser.c_ast import Switch
 
 
 class RestApiRequestMethods:
@@ -35,11 +34,11 @@ class GraphQlRequestMethods:
     @staticmethod
     def get_disciplines_request():
 
-        search = request.headers.get('search')
-        if search:
+        name = request.args.get('name')
+        if name:
             query = f"""
             query{{
-                disciplines(search: "{search}")  {{
+                disciplines(search: "{name}")  {{
                     name
                 }}
             }}
@@ -53,7 +52,7 @@ class GraphQlRequestMethods:
 
         response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})
         data = response.json()
-        disciplines = data.get("data", {}).get("disciplines", [])
+        disciplines = data.get("disciplines", [])
         return disciplines
 
     @staticmethod
@@ -67,15 +66,15 @@ class GraphQlRequestMethods:
 
         response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})
         data = response.json()
-        periods = data.get("data", {}).get("periods", [])
+        periods = data.get("periods", [])
         return periods
 
     @staticmethod
     def get_teachers_request():
-        search = request.headers.get('search')
-        if search:
+        name = request.args.get('name')
+        if name:
             query = f"""query{{
-                                teachers(search: "{search}") {{
+                                teachers(search: "{name}") {{
                                     name
                                     id
                                 }}
@@ -91,7 +90,7 @@ class GraphQlRequestMethods:
 
         response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})
         data = response.json()
-        teachers = data.get("data", {}).get("teachers", [])
+        teachers = data.get("teachers", [])
         return teachers
 
     @staticmethod
@@ -108,7 +107,7 @@ class GraphQlRequestMethods:
 
         response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})
         data = response.json()
-        rooms = data.get("data", {}).get("rooms", [])
+        rooms = data.get("rooms", [])
         return rooms
 
     @staticmethod
@@ -125,7 +124,7 @@ class GraphQlRequestMethods:
 
         response = requests.post(f"{os.getenv('URL_graph')}", json = {"query":query})
         data = response.json()
-        campus = data.get("data",{}).get("campus",[])
+        campus = data.get("campus",[])
         return campus
 
     @staticmethod
@@ -142,7 +141,7 @@ class GraphQlRequestMethods:
 
         response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})
         data = response.json()
-        types = data.get("data", {}).get("types", [])
+        types = data.get("types", [])
         return types
 
     @staticmethod
@@ -166,7 +165,7 @@ class GraphQlRequestMethods:
     @staticmethod
     def get_specific_type():
 
-        search = request.headers.get('search')
+        search = request.args.get('search')
 
         query = f"""
         query{{
@@ -183,17 +182,17 @@ class GraphQlRequestMethods:
 
         response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})
         data = response.json()
-        types = data.get("data", {}).get("types", [])
+        types = data.get("types", [])
         return types
 
     @staticmethod
     def get_specific_room():
 
-        search = request.headers.get('search')
+        name = request.args.get('name')
 
         query = f"""
         query{{
-            rooms(search: "{search}")
+            rooms(search: "{name}")
                 {{
                     id
                     name
@@ -207,15 +206,5 @@ class GraphQlRequestMethods:
 
         response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})
         data = response.json()
-        room = data.get("data", {}).get("rooms", [])
+        room = data.get("rooms", [])
         return room
-
-
-
-
-
-
-
-
-
-

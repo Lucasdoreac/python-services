@@ -845,11 +845,20 @@ def get_swagger_specification(path, method=None, resource=None):
                 ],
                 "parameters": [
                     {
-                        "name": "x-api-key",
-                        "in": "header",
+                        "name": "email",
+                        "in": "query",
                         "type": "string",
                         "required": True,
-                        "description": "Chave de API para autenticação"
+                        "description": "O email associado ao token de autenticação.",
+                        "example": "usuario@udf.edu.br"
+                    },
+                    {
+                        "name": "token",
+                        "in": "query",
+                        "type": "string",
+                        "required": True,
+                        "description": "Client token para autenticação.",
+                        "example": "hash_auth"
                     },
                 ],
                 "responses": {
@@ -864,51 +873,27 @@ def get_swagger_specification(path, method=None, resource=None):
                                     "items": {
                                         "type": "object",
                                         "properties": {
-                                            "_id": {
-                                                "type": "string",
-                                                "description": "ID da sala",
-                                                "example": "661945b2e764a62988bbcf3d"
+                                            "campus": {
+                                                "type": "object",
+                                                "description": "edifício associado à sala",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string",
+                                                        "description": "ID do campus",
+                                                        "example": "31d5d343-df75-4b65-b5a9-5151d886a509"
+                                                    },
+                                                    "name": {
+                                                        "type": "string",
+                                                        "description": "Nome do campus",
+                                                        "example": "EDIFÍCIO REZENDE R. DE REZENDE"
+                                                    }
+                                                },
                                             },
                                             "name": {
                                                 "type": "string",
                                                 "description": "Nome da sala",
-                                                "example": "Sala Online"
+                                                "example": "ARQ I"
                                             },
-                                            "type": {
-                                                "type": "integer",
-                                                "description": "Tipo da sala (0 para 'online', 1 para laboratório, etc.)",
-                                                "example": 0
-                                            },
-                                            "buildingId": {
-                                                "type": "string",
-                                                "description": "ID do edifício onde a sala está localizada",
-                                                "example": "6619442be764a62988bbcf39"
-                                            },
-                                            "floor": {
-                                                "type": "string",
-                                                "description": "Andar onde a sala está localizada",
-                                                "example": "Terreo"
-                                            },
-                                            "roomNumber": {
-                                                "type": "string",
-                                                "description": "Número da sala",
-                                                "example": "19"
-                                            },
-                                            "studentsCapacity": {
-                                                "type": "integer",
-                                                "description": "Capacidade de estudantes que a sala suporta",
-                                                "example": 12
-                                            },
-                                            "studentCapacity": {
-                                                "type": "integer",
-                                                "description": "Capacidade de estudantes (pode ser um erro no nome do campo)",
-                                                "example": 35
-                                            },
-                                            "id": {
-                                                "type": "string",
-                                                "description": "Identificador adicional para a sala",
-                                                "example": "878979123423"
-                                            }
                                         },
                                         "required": ["_id", "name"]
                                     }
@@ -955,13 +940,6 @@ def get_swagger_specification(path, method=None, resource=None):
                 "application/json"
             ],
             "parameters": [
-                {
-                    "name": "x-api-key",
-                    "in": "header",
-                    "type": "string",
-                    "required": True,
-                    "description": "Chave de API para autenticação"
-                },
                 {
                     "name": "email",
                     "in": "header",
@@ -1098,6 +1076,111 @@ def get_swagger_specification(path, method=None, resource=None):
         if method == 'GET':
             pass
 
+    if path == 'rooms/search-rooms':
+        if method == 'GET':
+            return {
+                "summary": "Pesquisar salas pelo nome.",
+                "description": "Endpoint para recuperar salas que correspondam parcial ou totalmente ao nome informado.",
+                "tags": ["Resources"],
+                "operationId": "searchRooms",
+                "produces": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "name": "email",
+                        "in": "query",
+                        "type": "string",
+                        "required": True,
+                        "description": "O email associado ao token de autenticação.",
+                        "example": "usuario@udf.edu.br"
+                    },
+                    {
+                        "name": "token",
+                        "in": "query",
+                        "type": "string",
+                        "required": True,
+                        "description": "Client token para autenticação.",
+                        "example": "hash_auth"
+                    },
+                    {
+                        "name": "name",
+                        "in": "query",
+                        "type": "string",
+                        "required": True,
+                        "description": "Parte ou nome completo da sala para filtro.",
+                        "example": "arq"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lista de salas retornada com sucesso",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "rooms": {
+                                    "type": "array",
+                                    "description": "Lista de salas encontradas",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "campus": {
+                                                "type": "object",
+                                                "description": "Edifício associado à sala",
+                                                "properties": {
+                                                    "name": {
+                                                        "type": "string",
+                                                        "description": "Nome do campus",
+                                                        "example": "EDIFÍCIO REZENDE R. DE REZENDE"
+                                                    }
+                                                }
+                                            },
+                                            "id": {
+                                                "type": "string",
+                                                "description": "ID da sala",
+                                                "example": "c0c29f38-6bf3-4538-bf54-4570dc85422c"
+                                            },
+                                            "name": {
+                                                "type": "string",
+                                                "description": "Nome da sala",
+                                                "example": "ARQ I"
+                                            }
+                                        },
+                                        "required": ["id", "name"]
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Nenhuma sala encontrada com o critério especificado",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "error": {
+                                    "type": "string",
+                                    "description": "Mensagem de erro",
+                                    "example": "Room not found by search method"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Erro interno do servidor",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "error": {
+                                    "type": "string",
+                                    "description": "Mensagem de erro",
+                                    "example": "Erro interno do servidor"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
     if path == 'types':
         if method == 'GET':
             if resource is None:
@@ -1202,141 +1285,6 @@ def get_swagger_specification(path, method=None, resource=None):
                                         "type": "string",
                                         "description": "Mensagem de erro",
                                         "example": "There is no such type"
-                                    }
-                                }
-                            }
-                        },
-                        "502": {
-                            "description": "Falha na sincronização de dados com uma API externa",
-                            "schema": {
-                                "type": "object",
-                                "properties": {
-                                    "error": {
-                                        "type": "string",
-                                        "description": "Mensagem de erro",
-                                        "example": "Failed to fetch data from external API."
-                                    }
-                                }
-                            }
-                        },
-                    }
-                }
-
-            elif resource == 'collection':
-                return {
-                    "summary": "Obter tipos por coleção específica",
-                    "description": "Endpoint para recuperar os tipos de uma coleção específica, como 'rooms' ou 'ODS'.",
-                    "tags": ["Types"],
-                    "operationId": "getTypeByCollection",
-                    "parameters": [
-                        {
-                            "name": "email",
-                            "in": "header",
-                            "type": "string",
-                            "required": True,
-                            "description": "Email do usuário para autenticação.",
-                            "example": "usuario@udf.edu.br"
-                        },
-                        {
-                            "name": "token",
-                            "in": "header",
-                            "type": "string",
-                            "required": True,
-                            "description": "Token de autenticação do usuário.",
-                            "example": "Bearer abcdef12345"
-                        },
-                        {
-                            "name": "collection",
-                            "in": "path",
-                            "description": "Nome da coleção para obter os tipos (e.g., rooms, ODS, events).",
-                            "required": True,
-                            "type": "string",
-                            "example": "rooms, ODS, events"
-                        }
-                    ],
-                    "produces": [
-                        "application/json"
-                    ],
-                    "responses": {
-                        "200": {
-                            "description": "Tipos retornados com sucesso",
-                            "schema": {
-                                "type": "object",
-                                "properties": {
-                                    "_id": {
-                                        "type": "string",
-                                        "description": "ID da coleção",
-                                        "example": "66199c62d85d5425656d0c18"
-                                    },
-                                    "collection": {
-                                        "type": "string",
-                                        "description": "Nome da coleção",
-                                        "example": "ODS"
-                                    },
-                                    "types": {
-                                        "type": "array",
-                                        "description": "Lista de tipos disponíveis na coleção",
-                                        "items": {
-                                            "type": "object",
-                                            "properties": {
-                                                "id": {
-                                                    "type": "integer",
-                                                    "description": "ID do tipo",
-                                                    "example": 1
-                                                },
-                                                "nome": {
-                                                    "type": "string",
-                                                    "description": "Nome do tipo",
-                                                    "example": "Erradicação da pobreza"
-                                                },
-                                                "type": {
-                                                    "type": "string",
-                                                    "description": "Descrição do tipo",
-                                                    "example": "EDP"
-                                                }
-                                            },
-                                            "required": ["id", "type"]
-                                        }
-                                    }
-                                },
-                                "required": ["_id", "collection", "types"]
-                            }
-                        },
-                        "401": {
-                            "description": "Erro de autenticação de email e/ou token",
-                            "schema": {
-                                "type": "object",
-                                "properties": {
-                                    "error": {
-                                        "type": "string",
-                                        "description": "Mensagem de erro",
-                                        "example": "Email missing"
-                                    }
-                                }
-                            }
-                        },
-                        "404": {
-                            "description": "Coleção não encontrada",
-                            "schema": {
-                                "type": "object",
-                                "properties": {
-                                    "error": {
-                                        "type": "string",
-                                        "description": "Mensagem de erro",
-                                        "example": "Collection not found"
-                                    }
-                                }
-                            }
-                        },
-                        "500": {
-                            "description": "Resposta de uma API externa com JSON inválido",
-                            "schema": {
-                                "type": "object",
-                                "properties": {
-                                    "error": {
-                                        "type": "string",
-                                        "description": "Mensagem de erro",
-                                        "example": "Invalid JSON response from external API."
                                     }
                                 }
                             }
@@ -1472,6 +1420,14 @@ def get_swagger_specification(path, method=None, resource=None):
                         "description": "Token de autenticação do usuário.",
                         "example": "Bearer abcdef12345"
                     },
+                    {
+                        "name": "name",
+                        "in": "query",
+                        "type": "string",
+                        "required": False,
+                        "description": "Filtrar disciplinas pelo nome.",
+                        "example": "SISTEMAS AUTOMOTIVOS"
+                    }
                 ],
                 "responses": {
                     "200": {
@@ -1527,5 +1483,371 @@ def get_swagger_specification(path, method=None, resource=None):
                             }
                         }
                     },
+                }
+            }
+    if path == 'periods':
+        if method == 'GET':
+            return {
+                "summary": "Obter todos os períodos de disponibilidade.",
+                "description": "Endpoint para recuperar todos os períodos disponíveis.",
+                "tags": ["Resources"],
+                "operationId": "get_periods",
+                "produces": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "name": "email",
+                        "in": "query",
+                        "type": "string",
+                        "required": True,
+                        "description": "O e-mail associado ao token de autenticação.",
+                        "example": "usuario@udf.edu.br"
+                    },
+                    {
+                        "name": "token",
+                        "in": "query",
+                        "type": "string",
+                        "required": True,
+                        "description": "Client token para autenticação.",
+                        "example": "hash_auth"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lista de períodos retornada com sucesso",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "periods": {
+                                    "type": "array",
+                                    "description": "Lista de períodos de disponibilidade",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "name": {
+                                                "type": "string",
+                                                "description": "Nome do período de disponibilidade",
+                                                "example": "MANHÃ"
+                                            }
+                                        },
+                                        "required": ["name"]
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Nenhum período encontrado",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "error": {
+                                    "type": "string",
+                                    "description": "Mensagem de erro",
+                                    "example": "periods not found"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Erro interno do servidor",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "error": {
+                                    "type": "string",
+                                    "description": "Mensagem de erro",
+                                    "example": "Erro interno do servidor"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+    if path == 'teachers':
+        if method == 'GET':
+            return {
+                "summary": "Obter professores.",
+                "description": "Endpoint para recuperar a lista de professores, com opção de filtrar pelo nome.",
+                "tags": ["Resources"],
+                "operationId": "getTeachers",
+                "produces": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "name": "email",
+                        "in": "query",
+                        "type": "string",
+                        "required": True,
+                        "description": "O e-mail associado ao token de autenticação.",
+                        "example": "usuario@udf.edu.br"
+                    },
+                    {
+                        "name": "token",
+                        "in": "query",
+                        "type": "string",
+                        "required": True,
+                        "description": "Client token para autenticação.",
+                        "example": "hash_auth"
+                    },
+                    {
+                        "name": "name",
+                        "in": "query",
+                        "type": "string",
+                        "required": False,
+                        "description": "Nome (ou parte do nome) do professor para filtrar.",
+                        "example": "PEDRO"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lista de professores retornada com sucesso",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "teachers": {
+                                    "type": "array",
+                                    "description": "Lista de professores encontrados",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "id": {
+                                                "type": "string",
+                                                "description": "ID do professor",
+                                                "example": "953b59ac-dff7-4ff0-9eef-ba1fdfeb7e89"
+                                            },
+                                            "name": {
+                                                "type": "string",
+                                                "description": "Nome do professor",
+                                                "example": "PEDRO AUGUSTO DA SILVA SOARES"
+                                            }
+                                        },
+                                        "required": ["id", "name"]
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Nenhum professor encontrado",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "error": {
+                                    "type": "string",
+                                    "description": "Mensagem de erro",
+                                    "example": "teachers not found"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Erro interno do servidor",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "error": {
+                                    "type": "string",
+                                    "description": "Mensagem de erro",
+                                    "example": "Erro interno do servidor"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+    if path == 'all-types':
+        if method == 'GET':
+            return {
+                "summary": "Obter todos os tipos.",
+                "description": "Endpoint para recuperar todos os documentos de tipos no banco de dados.",
+                "tags": ["Types"],
+                "operationId": "getAllTypes",
+                "produces": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "name": "email",
+                        "in": "query",
+                        "type": "string",
+                        "required": True,
+                        "description": "O email associado ao token de autenticação.",
+                        "example": "usuario@udf.edu.br"
+                    },
+                    {
+                        "name": "token",
+                        "in": "query",
+                        "type": "string",
+                        "required": True,
+                        "description": "Client token para autenticação.",
+                        "example": "hash_auth"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lista de tipos retornada com sucesso.",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "types": {
+                                    "type": "array",
+                                    "description": "Lista dos grupos de tipos.",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "collection": {
+                                                "type": "string",
+                                                "description": "Nome da coleção à qual esses tipos pertencem.",
+                                                "example": "rooms"
+                                            },
+                                            "types": {
+                                                "type": "array",
+                                                "description": "Lista de tipos relacionados a essa coleção.",
+                                                "items": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "id": {
+                                                            "type": "integer",
+                                                            "description": "ID do tipo.",
+                                                            "example": 0
+                                                        },
+                                                        "name": {
+                                                            "type": "string",
+                                                            "description": "Nome do tipo.",
+                                                            "example": "Vídeo Chamada via Zoom ou Google Meet"
+                                                        }
+                                                    },
+                                                    "required": ["id", "name"]
+                                                }
+                                            }
+                                        },
+                                        "required": ["collection", "types"]
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Nenhum tipo encontrado.",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "error": {
+                                    "type": "string",
+                                    "description": "Mensagem de erro.",
+                                    "example": "types not found"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Erro interno do servidor.",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "error": {
+                                    "type": "string",
+                                    "description": "Mensagem de erro.",
+                                    "example": "Erro interno do servidor"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+    if path == 'type-collection':
+        if method == 'GET':
+            return {
+                "summary": "Obter tipos por coleção.",
+                "description": "Endpoint para recuperar os documentos de tipos associados a uma determinada coleção.",
+                "tags": ["Types"],
+                "operationId": "getTypeByCollection",
+                "produces": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "name": "email",
+                        "in": "query",
+                        "type": "string",
+                        "required": True,
+                        "description": "O email associado ao token de autenticação.",
+                        "example": "usuario@udf.edu.br"
+                    },
+                    {
+                        "name": "token",
+                        "in": "query",
+                        "type": "string",
+                        "required": True,
+                        "description": "Client token para autenticação.",
+                        "example": "hash_auth"
+                    },
+                    {
+                        "name": "collection",
+                        "in": "query",
+                        "type": "string",
+                        "required": True,
+                        "description": "Nome da coleção para filtrar os tipos.",
+                        "example": "rooms"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lista de tipos retornada com sucesso.",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "types": {
+                                    "type": "array",
+                                    "description": "Lista de tipos da coleção especificada.",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "id": {
+                                                "type": "integer",
+                                                "description": "ID do tipo.",
+                                                "example": 0
+                                            },
+                                            "name": {
+                                                "type": "string",
+                                                "description": "Nome do tipo.",
+                                                "example": "Laboratório de Informática"
+                                            }
+                                        },
+                                        "required": ["id", "name"]
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Nenhum tipo encontrado para a coleção especificada.",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "error": {
+                                    "type": "string",
+                                    "description": "Mensagem de erro.",
+                                    "example": "types not found"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Erro interno do servidor.",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "error": {
+                                    "type": "string",
+                                    "description": "Mensagem de erro.",
+                                    "example": "Erro interno do servidor"
+                                }
+                            }
+                        }
+                    }
                 }
             }
