@@ -1,8 +1,9 @@
 import os
-
+from flask import request
 import requests
 
-class GetRequestMethods:
+
+class RestApiRequestMethods:
     
     @staticmethod
     def get_request_simple(url):
@@ -28,3 +29,182 @@ class GetRequestMethods:
             raise Exception("Variavel de ambiente não existe ou não esta sendo acessada!")
         return url
 
+class GraphQlRequestMethods:
+
+    @staticmethod
+    def get_disciplines_request():
+
+        name = request.args.get('name')
+        if name:
+            query = f"""
+            query{{
+                disciplines(search: "{name}")  {{
+                    name
+                }}
+            }}
+            """
+        else:
+            query = """query{
+                       disciplines {
+                         name
+                       }
+                       }"""
+
+        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})
+        data = response.json()
+        disciplines = data.get("disciplines", [])
+        return disciplines
+
+    @staticmethod
+    def get_all_periods_request():
+
+        query = """query{
+                    periods {
+                        name
+                    }
+                    }"""
+
+        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})
+        data = response.json()
+        periods = data.get("periods", [])
+        return periods
+
+    @staticmethod
+    def get_teachers_request():
+        name = request.args.get('name')
+        if name:
+            query = f"""query{{
+                                teachers(search: "{name}") {{
+                                    name
+                                    id
+                                }}
+                                }}"""
+        else:
+            query = """query{
+                        teachers {
+                            name
+                            id
+                        }
+                        }"""
+
+
+        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})
+        data = response.json()
+        teachers = data.get("teachers", [])
+        return teachers
+
+    @staticmethod
+    def get_all_rooms_request():
+        query= """query{
+                  rooms{
+                    name
+                     campus{
+                      name
+                      id
+                    }
+                  }
+                }"""
+
+        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})
+        data = response.json()
+        rooms = data.get("rooms", [])
+        return rooms
+
+    @staticmethod
+    def get_all_campus_request():
+
+        query = """
+        query {
+            campus {
+                id
+                name
+            }
+        }
+        """
+
+        response = requests.post(f"{os.getenv('URL_graph')}", json = {"query":query})
+        data = response.json()
+        campus = data.get("campus",[])
+        return campus
+
+    @staticmethod
+    def get_all_types_request():
+        query = """query{
+                      types{
+                        collection
+                        types {
+                          id
+                          name
+                        }
+                      }                    
+                    }"""
+
+        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})
+        data = response.json()
+        types = data.get("types", [])
+        return types
+
+    @staticmethod
+    def get_all_request_by_collection(collectionName):
+        match collectionName:
+            case "periods":
+                return GraphQlRequestMethods.get_all_periods_request()
+            case "disciplines":
+                return GraphQlRequestMethods.get_disciplines_request()
+            case "teachers":
+                return GraphQlRequestMethods.get_teachers_request()
+            case "campus":
+                return GraphQlRequestMethods.get_all_campus_request()
+            case "rooms":
+                return GraphQlRequestMethods.get_all_rooms_request()
+            case "types":
+                return GraphQlRequestMethods.get_all_types_request()
+            case _:
+                raise Exception("Erro: nome de coleção invalido ao utilizar a função get_all_request_by_collection!")
+
+    @staticmethod
+    def get_specific_type():
+
+        search = request.args.get('search')
+
+        query = f"""
+        query{{
+            types(search: "{search}"){{
+                collection
+                    types{{
+                        name
+                        type
+                        }}
+                    }}
+                }}
+        """
+
+
+        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})
+        data = response.json()
+        types = data.get("types", [])
+        return types
+
+    @staticmethod
+    def get_specific_room():
+
+        name = request.args.get('name')
+
+        query = f"""
+        query{{
+            rooms(search: "{name}")
+                {{
+                    id
+                    name
+                    campus {{            
+                        name
+                        }}         
+                }}
+            }}
+        """
+
+
+        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})
+        data = response.json()
+        room = data.get("rooms", [])
+        return room

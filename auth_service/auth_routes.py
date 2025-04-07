@@ -75,38 +75,37 @@ class AuthRoutes:
     @swag_from(get_swagger_specification('auth', 'POST'))
     def auth_mail():
         """
-                Endpoint para envio de magic link via email.
-
-                Processa o email recebido como parâmetro, valida o domínio,
-                gera o token de autenticação, insere o token na base e envia o email com o link.
-
-                Returns:
-                    JSON response: Mensagem de sucesso ou erro, com o status HTTP apropriado.
+        Endpoint para envio de magic link via email.
+        Processa o email recebido como parâmetro, valida o domínio,
+        gera o token de autenticação, insere o token na base e envia o email com o link.
+        Returns:
+            JSON response: Mensagem de sucesso ou erro, com o status HTTP apropriado.
          """
 
         # inject controller
         authentication_controller = AuthenticationController()
         email = request.args.get('email')
-        allowed_emails = ["danrley.pereira@cs.udf.edu.br"]
-        if not (email.endswith('@udf.edu.br') or email in allowed_emails):
+        if not email.endswith('@udf.edu.br'):
             return jsonify({'error': 'Invalid email domain'}), 400
-
         # Generate hash via the controller
         hash_auth = authentication_controller.generate_hash
 
-        info = {
-            'email':email,
-            'token': hash_auth
-        }
+        # Save the hash and email in the database
+        authentication_controller.insert_token(email, hash_auth)
 
-        url = f"{os.getenv('URL_AUTH')}/auth/insert-token"
-
+        # Send the magic link via email
+        magic_link = f"{os.getenv('REACT_APP')}/auth/callback?email={email}&hash={hash_auth}"
+        if os.getenv('FLASK_ENV') == 'development':
+            return jsonify({'magic_link': magic_link}), 201
         try:
-            response = requests.post(url, json=info)
-            if response.status_code != 200:
-                return jsonify({'error': 'Failed to validate token'}), 503
+            send_response = send_magic_link(email, email.split('@')[0], magic_link)
+            if send_response.status_code != 200:
+                return jsonify({'error': 'Email sender service unavailable: failed to send email'}), 503
         except Exception as e:
             return jsonify({'error': str(e)}), 503
+
+
+        return jsonify({'message': 'Magic link sent successfully'}), 201
 
 
         # Send the magic link via email
@@ -137,33 +136,3 @@ class AuthRoutes:
         """
 
         return jsonify(True), 200
-
-    @staticmethod
-    @auth_bp.route('/auth/insert-token', methods=['POST'])
-    @swag_from(get_swagger_specification(path='auth', method='POST'))
-    def insert():
-
-        """
-               Endpoint para inserção de token na base de dados.
-
-               Recebe um JSON com 'email' e 'token', e insere essa informação através do controlador.
-
-               Returns:
-                   JSON response: Retorna True com status HTTP 200 se a inserção for bem-sucedida,
-                                  ou mensagem de erro com o status apropriado.
-        """
-
-
-        data = request.get_json()
-        if not data:
-            return jsonify({'erro':'Missing json'}),400
-
-        email = data.get('email')
-        hash_auth = data.get('token')
-
-        if not email or not hash_auth:
-            return jsonify({'error':'email and hash required'}),400
-
-        authentication_controller = AuthenticationController()
-        authentication_controller.insert_token(email, hash_auth)
-        return jsonify(True),200

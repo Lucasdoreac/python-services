@@ -5,7 +5,7 @@ from flask import jsonify
 from datetime import datetime, timedelta
 from DAL import *
 from DAL.collections_repositories import EventsRepository
-from sr_requests_module.request_methods import GetRequestMethods
+from sr_requests_module.request_methods import RestApiRequestMethods
 
 
 # Initialize repository instances
@@ -149,8 +149,8 @@ class FlowController:
         """
             Busca todas as salas cadastradas no shared-resources, utilizando paginação.
         """
-        url = GetRequestMethods.generate_url("/rooms")
-        response = GetRequestMethods.get_request_page(url, page, page_size)
+        url = RestApiRequestMethods.generate_url("/rooms")
+        response = RestApiRequestMethods.get_request_page(url, page, page_size)
         #if response.status_code != 200:
        #     raise Exception("Erro ao buscar salas do shared-resources")
 

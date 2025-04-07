@@ -3,6 +3,7 @@ import requests
 from flask import Blueprint, jsonify, request
 from flasgger import swag_from
 
+from sr_requests_module.request_methods import GraphQlRequestMethods
 from . import AppLogger, Logmessage, LogType
 from .swagger_docs import get_swagger_specification
 from .auth_decorators import token_required
@@ -68,6 +69,37 @@ class TypesRoutes:
         except ValueError:
             return jsonify({'error': 'Invalid JSON response from external API.'}), 500
 
+    @staticmethod
+    @types_bp.route('/all-types', methods=['GET'])
+    @token_required
+    @swag_from(get_swagger_specification(path='all-types', method='GET'))
+    def get_all_types():
+
+        types = GraphQlRequestMethods.get_all_types_request()
+        if types:
+            return jsonify({'types': types}), 200
+        AppLogger.log(
+            Logmessage.TYPES_NOT_FOUND,
+            LogType.INFO,
+            ip_address=request.remote_addr,
+        )
+        return jsonify({'error': "types not found"}), 404
+
+    @staticmethod
+    @types_bp.route('/type-collection', methods=['GET'])
+    @token_required
+    @swag_from(get_swagger_specification(path='type-collection', method='GET'))
+    def get_type_by_collection_graphql():
+
+        types = GraphQlRequestMethods.get_specific_type()
+        if types:
+            return jsonify({'types': types}), 200
+        AppLogger.log(
+            Logmessage.TYPES_NOT_FOUND,
+            LogType.INFO,
+            ip_address=request.remote_addr,
+        )
+        return jsonify({'error': "types not found"}), 404
 
     @staticmethod
     @types_bp.route('/types/<string:collection>', methods=['GET'])
