@@ -19,7 +19,7 @@ from datetime import datetime
 #Disciplines not found
 #Periods not found
 #Teachers not found
-# id not informed ou null
+# ID not informed or null
 
 # Deactivate werkzeug logs
 logging.getLogger('werkzeug').setLevel(logging.ERROR)
