@@ -3,10 +3,11 @@ from datetime import datetime
 from hashlib import sha256
 from DAL.collections_repositories import SendEmailrepository
 import requests
-from flask import render_template, current_app, url_for
+from flask import render_template, current_app, url_for, request
 from DAL import ReservationManager
 from SLL import AppLogger, Logmessage, LogType
-from .index import events_repository
+from sr_requests_module.request_methods import GraphQlRequestMethods
+from .index import events_repository,FlowController
 from BLL.enums import EmailStep, EventStatus
 
 
@@ -47,6 +48,11 @@ def send_to_coordenacao(event_id):
         request_changes_link = url_for('templates_bp.request_changes', eventId=event_id, tokenId=tokenId, _external=True)
         approve_link = url_for('templates_bp.approve', eventId=event_id, tokenId=tokenId, who='coordenacao', _external=True)
         reject_link = url_for('templates_bp.reject', eventId=event_id, tokenId=tokenId, who='coordenacao', _external=True)
+
+    course_id = FlowController.find_event_by_event_id(event_id)
+    coordinator_id = get_coordinator_by_graduation_id(course_id['graduationId'])
+    teacher_email = find_teacher_email_by_id(coordinator_id)
+    emails["coordenacao"].append(teacher_email)
 
     # Render the template with the appropriate data
     html_content = render_template(
@@ -225,7 +231,7 @@ def send_event_status(event_id, is_approved: bool, who: str, token:str):
     return response
 
 def verify_token_from_email(tokenId) -> bool:
-    data = find_send_email_by_token_id(tokenId)
+    data = send_email_repository.get_send_email_by_token_id(tokenId)
 
     for record in data:
         if tokenId == record.get("tokenId") and record.get("active") is True:
@@ -253,9 +259,6 @@ def apply_token_action(step: int, action:str, eventId:str, tokenId: str) -> None
 
 send_email_repository = SendEmailrepository()
 
-def find_send_email_by_token_id(tokenId: str):
-    return send_email_repository.find_all({"tokenId": tokenId})
-
 def create_send_email_token(event_id: str,step: EmailStep)-> str:
     now = datetime.now()
     tokenId = sha256(str(now).encode()).hexdigest()
@@ -263,3 +266,21 @@ def create_send_email_token(event_id: str,step: EmailStep)-> str:
     reservation_manager.insert_send_email(tokenId, step.value, event_id)
     return tokenId
 
+def get_coordinator_by_graduation_id(id: str)-> str:
+    course = GraphQlRequestMethods.get_course_by_id(id)
+    course = course[0]
+    return course['coordinator']
+
+def find_teacher_email_by_id(id: str) -> str:
+    """
+    Find a teacher's name by their ID.
+
+    Args:
+        id (str): The teacher's ID.
+
+    Returns:
+        str: The teacher's email.
+    """
+    teacher = GraphQlRequestMethods.get_teachers_by_id(id)
+    teacher = teacher[0]
+    return teacher['email']

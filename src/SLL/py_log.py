@@ -19,6 +19,7 @@ from datetime import datetime
 #Disciplines not found
 #Periods not found
 #Teachers not found
+# id not informed ou null
 
 # Deactivate werkzeug logs
 logging.getLogger('werkzeug').setLevel(logging.ERROR)
@@ -50,6 +51,7 @@ class Logmessage(Enum):
     TEACHERS_NOT_FOUND = "Teachers not found;IP: {ip_address};"
     TYPES_NOT_FOUND = "Types not found;IP: {ip_address};"
     AUTH_SERVICE_UNAVAILABLE = "Authentication service unavailable;"
+    ID_NOT_INFORMED = "ID not informed or null;IP: {ip_address};"
 
 
 class LogType(Enum):

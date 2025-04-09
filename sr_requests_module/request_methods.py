@@ -2,6 +2,8 @@ import os
 from flask import request
 import requests
 
+from SLL import AppLogger, Logmessage, LogType
+
 
 class RestApiRequestMethods:
     
@@ -208,3 +210,55 @@ class GraphQlRequestMethods:
         data = response.json()
         room = data.get("rooms", [])
         return room
+
+    @staticmethod
+    def get_course_by_id(Id):
+        if Id:
+            query = f"""
+            query{{
+                courses(courseId: {Id})
+                    {{
+                        id
+                        coordinator
+                        name     
+                    }}
+                }}
+            """
+        else:
+            AppLogger.log(
+                Logmessage.ID_NOT_INFORMED,
+                LogType.ERROR,
+            )
+            raise Exception("ID não informado ou nulo!")
+
+
+        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})
+        data = response.json()
+        course = data.get("courses", [])
+        return course
+
+    @staticmethod
+    def get_teachers_by_id(Id):
+        if Id:
+            query = f"""
+            query{{
+                teachers(teacherId: "{Id}")
+                    {{
+                        id
+                        email
+                        name     
+                    }}
+                }}
+            """
+        else:
+            AppLogger.log(
+                Logmessage.ID_NOT_INFORMED,
+                LogType.ERROR,
+            )
+            raise Exception("ID não informado ou nulo!")
+
+
+        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})
+        data = response.json()
+        teachers = data.get("teachers", [])
+        return teachers

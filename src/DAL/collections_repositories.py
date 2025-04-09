@@ -19,6 +19,9 @@ class SendEmailrepository(BaseRepository):
         collection = self.get_collection_name()
         return collection.update_one(query, updated_fields)
 
+    def get_send_email_by_token_id(self, tokenId: str):
+        return self.find_all({"tokenId": tokenId})
+
 
 class RoomsRepository(BaseRepository):
     def get_collection_name(self):
