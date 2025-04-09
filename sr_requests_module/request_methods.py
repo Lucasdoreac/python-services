@@ -212,11 +212,11 @@ class GraphQlRequestMethods:
         return room
 
     @staticmethod
-    def get_course_by_id(Id):
-        if Id:
+    def get_course_by_id(graduationId: int)-> list:
+        if graduationId:
             query = f"""
             query{{
-                courses(courseId: {Id})
+                courses(courseId: {graduationId})
                     {{
                         id
                         coordinator
@@ -238,11 +238,11 @@ class GraphQlRequestMethods:
         return course
 
     @staticmethod
-    def get_teachers_by_id(Id):
-        if Id:
+    def get_teachers_by_id(graduationId: int)-> list:
+        if graduationId:
             query = f"""
             query{{
-                teachers(teacherId: "{Id}")
+                teachers(teacherId: "{graduationId}")
                     {{
                         id
                         email

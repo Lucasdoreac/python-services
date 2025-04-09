@@ -266,12 +266,12 @@ def create_send_email_token(event_id: str,step: EmailStep)-> str:
     reservation_manager.insert_send_email(tokenId, step.value, event_id)
     return tokenId
 
-def get_coordinator_by_graduation_id(id: str)-> str:
-    course = GraphQlRequestMethods.get_course_by_id(id)
+def get_coordinator_by_graduation_id(graduationId: int)-> str:
+    course = GraphQlRequestMethods.get_course_by_id(graduationId)
     course = course[0]
     return course['coordinator']
 
-def find_teacher_email_by_id(id: str) -> str:
+def find_teacher_email_by_id(graduationId: int) -> str:
     """
     Find a teacher's name by their ID.
 
@@ -281,6 +281,6 @@ def find_teacher_email_by_id(id: str) -> str:
     Returns:
         str: The teacher's email.
     """
-    teacher = GraphQlRequestMethods.get_teachers_by_id(id)
+    teacher = GraphQlRequestMethods.get_teachers_by_id(graduationId)
     teacher = teacher[0]
     return teacher['email']
