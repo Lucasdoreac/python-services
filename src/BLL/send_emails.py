@@ -271,7 +271,7 @@ def get_coordinator_by_graduation_id(graduationId: int)-> str:
     course = course[0]
     return course['coordinator']
 
-def find_teacher_email_by_id(graduationId: int) -> str:
+def find_teacher_email_by_id(teacherId: int) -> str:
     """
     Find a teacher's name by their ID.
 
@@ -281,6 +281,6 @@ def find_teacher_email_by_id(graduationId: int) -> str:
     Returns:
         str: The teacher's email.
     """
-    teacher = GraphQlRequestMethods.get_teachers_by_id(graduationId)
+    teacher = GraphQlRequestMethods.get_teachers_by_id(teacherId)
     teacher = teacher[0]
     return teacher['email']

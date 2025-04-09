@@ -238,11 +238,11 @@ class GraphQlRequestMethods:
         return course
 
     @staticmethod
-    def get_teachers_by_id(graduationId: int)-> list:
-        if graduationId:
+    def get_teachers_by_id(teacherId: int)-> list:
+        if teacherId:
             query = f"""
             query{{
-                teachers(teacherId: "{graduationId}")
+                teachers(teacherId: "{teacherId}")
                     {{
                         id
                         email
