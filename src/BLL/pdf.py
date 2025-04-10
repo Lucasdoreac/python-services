@@ -5,6 +5,7 @@ import typst
 from minio import Minio, S3Error
 from BLL import FlowController
 from DAL import ReservationManager
+import json
 
 
 def get_name_by_idODS(data: dict, filter_id: str) -> str:
@@ -60,10 +61,8 @@ def generate_event_pdf(event_id,data: Dict[str, Any] = None):
     else:
         ods_data = ods
 
-    if data:
-        event_data = FlowController.event_data_build(data)
-    else:
-        event_data = FlowController.find_event_by_event_id(event_id)
+
+    event_data = FlowController.find_event_by_event_id(event_id)
 
 
     name_ods = get_name_by_idODS(ods_data, event_data['odsId'])
@@ -100,20 +99,31 @@ def generate_event_pdf(event_id,data: Dict[str, Any] = None):
     # Define valores padrão para campos que podem não ter sido informados
     entrepreneurial_path = event_data['entrepreneuralPath'] or "Não associado a trilha empreendedora"
     extension_project = event_data['extensionProject'] or "Não associado a projeto de extensão"
-    students_monitors = event_data['studentsMonitors'] or "Sem alunos monitores"
+
+    students_monitors = resolve_jsonlist(event_data['studentsMonitors'], "Sem alunos monitores")
+    recursos_necessarios = resolve_jsonlist(event_data['resources'], "Recursos Necessários Não Informados!")
+    publico_alvo = resolve_jsonlist(event_data['targetPublic'], "Publico Alvo Não Informado!")
+
+   # if isinstance(event_data['studentsMonitors'], list):
+   #     students_monitors =', '.join(event_data['studentsMonitors'])
+   # else:
+   #     students_monitors = event_data['studentsMonitors'] or "Sem alunos monitores"
+
+
     date = data_evento
     hours_start = hora_inicio
     hours_end = hora_final
 
 
     typst_text = f"""
+
 // Título do Evento
 #set text(
   font: "New Computer Modern",
   size: 14pt
 )
 #align(center)[
-  = "{event_data['name']}"
+  = "Event name"
 ]
 
 #align(center)[
@@ -135,14 +145,9 @@ def generate_event_pdf(event_id,data: Dict[str, Any] = None):
   stroke: luma(v),
   gutter: 0.2em,
   fill: (x, y) =>
-    if x == 0 or y == 0 {{ gray }},
-  inset: (right: 1.5em),
-)
-#set table(
-  stroke: luma(v),
-  gutter: 0.2em,
-  fill: (x, y) =>
-    if x != 0 or x == 0 {{ gray.lighten(30%) }},
+
+    if x != 0 {{gray.lighten(55%)}}
+    else {{gray.lighten(35%)}},
   inset: (right: 1.5em),
 )
 
@@ -151,7 +156,6 @@ def generate_event_pdf(event_id,data: Dict[str, Any] = None):
     set text(black.lighten(5%))
     strong(it)
   }} else if it.body == [] {{
-    // Substitui células vazias por "N/A"
     pad(..it.inset)[_N/A_]
   }} else {{
     it
@@ -172,11 +176,14 @@ def generate_event_pdf(event_id,data: Dict[str, Any] = None):
     if x == 0 or y == 0 {{ blue }},
   inset: (right: 1.5em),
 )
+
 #set table(
   stroke: luma(v),
   gutter: 0.2em,
   fill: (x, y) =>
-    if x != 0 or x == 0 {{ blue.lighten(50%) }},
+
+    if x != 0 {{blue.lighten(59%)}}
+    else {{blue.lighten(45%)}},
   inset: (right: 1.5em),
 )
 
@@ -211,16 +218,55 @@ def generate_event_pdf(event_id,data: Dict[str, Any] = None):
   [ODS:], [`{name_ods}`],
   [Descrição:], [`{event_data['description']}`],
   [Curso:], [`{event_data['graduationId']}`],
-  [Público Alvo:], [`{event_data['targetPublic']}`],
-  [Recursos Necessários:], [`{event_data['resources']}`],
   [Número de Participantes Esperados:], [`{event_data['expectedSubscribers']}`],
-  [Sala:], [`{event_data['roomType']}`],
   [Trilha Empreendedora:], [`{entrepreneurial_path}`],
   [Projeto de Extensão:], [`{extension_project}`],
+  
+)
+
+
+
+#table(
+  columns: 2,
+  [Público Alvo:], [`{publico_alvo}`],
+  [Recursos Necessários:], [`{recursos_necessarios}`],
   [Alunos Monitores:], [`{students_monitors}`],
+  
+)
+
+
+#set text(
+  font: "New Computer Modern",
+  size: 14pt
+)
+
+// Evento
+
+*Informações da Reserva do Evento:*
+
+#set text(
+  font: "New Computer Modern",
+  size: 11pt
+)
+
+#set table(
+  stroke: luma(v),
+  gutter: 0.2em,
+  fill: (x, y) =>
+
+    if x != 0 {{orange.lighten(50%)}}
+    else {{orange.lighten(30%)}},
+  inset: (right: 1.5em),
+)
+
+#table(
+  columns: 2,
+  
+  [Sala:], [`{event_data['roomType']}`],
   [Data:],[`{date}`],
   [Horário de inicio:],[`{hours_start}`],
-  [Horário final:],[`{hours_end}`],   
+  [Horário final:],[`{hours_end}`], 
+  
 )
     """
 
@@ -289,3 +335,15 @@ def save_pdf(event_id):
 
     except S3Error as exc:
         print("Error occurred:", exc)
+
+
+def resolve_jsonlist(event_data, errormsg):
+
+    #tira o [] da list dentro do body
+    if isinstance(event_data, list):
+
+        return ', '.join(event_data)
+
+    else:
+
+        return event_data or errormsg
