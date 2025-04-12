@@ -57,5 +57,9 @@ class ReservationsRepository(BaseRepository):
         }
         return self.convert_id(list(self.get_collection_name().find(query)))
 
+    def find_by_query(self, query):
+        collection = self.get_collection_name()
+        return collection.find_one(query)
+
 
 

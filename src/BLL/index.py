@@ -67,6 +67,9 @@ class FlowController:
             reservation_start = reservation_date
             reservation_end = reservation_start + timedelta(hours=2)
 
+            if FlowController.already_reservation(reservation_start,room_id):
+                return jsonify({'error': 'Room already reserved for this time'}), 400
+
             reservation_system = ReservationManager()
             reservation_system.insert_reservation(
                 room_id,
@@ -288,3 +291,22 @@ class FlowController:
             "eventLogo": "",
             "status": data.get("status", "requested"),
         }
+
+    def already_reservation(start_at:datetime,room_id: str)-> bool:
+        """
+            Verifica se já existe uma reserva para a sala e horário informados.
+            :param start_at: Horário de início da reserva.
+            :param roomId: ID da sala a ser verificada.
+            :return: True se já existe reserva, False caso contrário.
+        """
+        start_at_limit = start_at + timedelta(hours=2)
+        query = {
+            "startAt": {
+                "$gte": start_at,
+                "$lt": start_at_limit
+            },
+            "roomId": room_id
+        }
+        return reservations_repository.find_by_query(query) is not None
+
+
