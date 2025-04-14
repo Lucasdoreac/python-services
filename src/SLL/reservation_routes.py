@@ -24,6 +24,9 @@ class ReservationRoutes:
                 ip_address=request.remote_addr,
             )
             return jsonify({'error': 'Missing date'}), 400
+
+        if FlowController.is_reserved(data['reservationDate'], data["roomId"]):
+            return jsonify({'error': 'Room already reserved for this time'}), 400
         return FlowController.register_reservation_from_json(data)
 
     @staticmethod
