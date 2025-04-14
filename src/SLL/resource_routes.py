@@ -2,7 +2,6 @@ import requests
 from flask import Blueprint, jsonify, request
 from flasgger import swag_from
 import os
-
 from BLL import FlowController
 from .auth_decorators import token_required
 from .swagger_docs import get_swagger_specification
