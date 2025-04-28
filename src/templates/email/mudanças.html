@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Edição Requisitada</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f9f9f9;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+            background: #fff;
+            border: 1px solid #ddd;
+            padding: 20px;
+            text-align: center;
+        }
+        .header {
+            background: #0D5580;
+            color: #fff;
+            padding: 10px;
+            margin: -20px -20px 20px;
+        }
+        .header h1 {
+            margin: 0;
+        }
+        .button {
+            text-decoration: none;
+            margin: 0 5px;
+        }
+        .button img {
+            vertical-align: middle;
+            border: none;
+        }
+        .icon {
+            margin: 20px 0;
+        }
+
+
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Mudanças no Evento</h1>
+        </div>
+        <p>Informe as mudanças para retornar ao requisitante:</p>
+
+    <p>Explique as mudanças:</p>
+        <form action="/store_changes" method="post">
+            <textarea name="mudancas" rows="4" cols="50" placeholder="Digite as mudanças aqui..."></textarea>
+            <br>
+            <button type="submit" style="background-color: #28a745; border: none; border-radius: 25px; padding: 10px 40px; color: #fff; font-size: 16px;">Send</button>
+        </form>
+
+    </div>
+
+</body>
+</html>

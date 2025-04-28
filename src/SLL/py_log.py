@@ -40,6 +40,7 @@ class Logmessage(Enum):
     FAILED_SEND_EMAIL = "Email sender service unavailable: failed to send email; IP: {ip_address}; Email: {email};"
     SENDING_EMAIL = "Sending email; email: {email}; event: {event}; token: {token};"
     EVENT_APPROVED_REJECTED_BY = "Event {event_id} {action} by {who}; token: {token};"
+    EVENT_REQUESTED_CHANGES_BY = "Event {event_id} requested changes by {who}; token: {token};"
     MISSING_DATA = "Missing data;IP: {ip_address} ;"
     EVENTS_NOT_FOUND = "Events not found;IP: {ip_address} ;"
     RESERVATION_NOT_FOUND = "Reservation not found;IP: {ip_address};"

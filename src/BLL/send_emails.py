@@ -45,7 +45,7 @@ def send_to_coordenacao(event_id):
 
     # Example links (adjust to your routes)
     with current_app.test_request_context():
-        request_changes_link = url_for('templates_bp.request_changes', eventId=event_id, tokenId=tokenId, _external=True)
+        request_changes_link = url_for('templates_bp.request_changes', eventId=event_id, tokenId=tokenId,who='coordenacao', _external=True)
         approve_link = url_for('templates_bp.approve', eventId=event_id, tokenId=tokenId, who='coordenacao', _external=True)
         reject_link = url_for('templates_bp.reject', eventId=event_id, tokenId=tokenId, who='coordenacao', _external=True)
 
@@ -229,6 +229,59 @@ def send_event_status(event_id, is_approved: bool, who: str, token:str):
     # Send the request to your cloud function
     response = requests.post(url, json=payload, headers=headers)
     return response
+
+def changes(event_id, who: str, token:str):
+    AppLogger.log(
+        Logmessage.EVENT_REQUESTED_CHANGES_BY,
+        LogType.INFO,
+        event_id=event_id,
+        action='Request Changes',
+        who=who,
+        token=token)
+
+    if who == 'coordenacao':
+        apply_token_action(0, "Request Changes", event_id, token)
+        event_status = EventStatus.REQUESTED_CHANGE.value
+    else:
+        apply_token_action(1, "Request Changes", event_id, token)
+        event_status = EventStatus.REQUESTED_CHANGE.value
+
+    event = events_repository.find_by_id(event_id)
+    email = event["organizer"]["email"]
+    event.pop("_id", None)
+    event["status"] = event_status
+
+    #Update event status
+    reservation_manager = ReservationManager()
+    reservation_manager.update_event(event_id, event_data=event)
+
+    # Render the template with the appropriate data
+    html_content = render_template(
+        "email/mudanças.html",
+    )
+    if os.getenv("FLASK_ENV") == "development":
+        return html_content
+
+    # Subject line changes based on approval or denial
+    subject = "Evento Exige Alterações"
+
+    # Prepare the email payload
+    url = f"{os.getenv('CLOUD_FUNCTION_URL')}/send-email"
+    payload = {
+        'subject': subject,
+        'content': html_content,
+        'to': [email],
+        'is_html': True
+    }
+    headers = {
+        'X-API-Key': os.getenv('CLOUD_FUNCTION_API_KEY'),
+        'Content-Type': 'application/json'
+    }
+
+    # Send the request to your cloud function
+    response = requests.post(url, json=payload, headers=headers)
+    return response
+
 
 def verify_token_from_email(tokenId) -> bool:
     data = send_email_repository.get_send_email_by_token_id(tokenId)
