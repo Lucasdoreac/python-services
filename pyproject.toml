@@ -28,6 +28,7 @@ setuptools = "^69.5.1"
 flasgger = "^0.9.7.1"
 typst = "^0.13.2"
 minio = "^7.2.15"
+gunicorn = "^23.0.0"
 
 
 [build-system]

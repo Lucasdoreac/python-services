@@ -1,11 +1,7 @@
-import os
-from datetime import datetime,date
-from hashlib import sha256
 from flask import Blueprint, jsonify, request
 from flasgger import swag_from
 from .swagger_docs import get_swagger_specification
 from SLL.auth_decorators import token_required
-from SLL.email_service import send_magic_link
 from BLL import AuthenticationController
 from SLL.py_log import AppLogger,LogType,Logmessage
 

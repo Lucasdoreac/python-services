@@ -1,5 +1,5 @@
-from dataclasses import dataclass, field
-from typing import List, Optional
+from dataclasses import dataclass
+from typing import List
 from datetime import datetime
 
 
@@ -39,6 +39,7 @@ class Event:
     extensionProject: str
     studentsMonitors: List[int]
     eventLogo: str
+    status: str
 
 
 @dataclass
@@ -57,6 +58,8 @@ class Reservation:
     courseId: str
     startAt: datetime
     endAt: datetime
+    status: str
+    eventId: str
 
 
 @dataclass

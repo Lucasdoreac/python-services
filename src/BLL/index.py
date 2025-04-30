@@ -5,8 +5,8 @@ from flask import jsonify
 from datetime import datetime, timedelta
 from DAL import *
 from DAL.collections_repositories import EventsRepository
-from sr_requests_module.request_methods import RestApiRequestMethods
-
+from SLL.cluster_api.request_methods import RestApiRequestMethods
+from utils.enums import EventStatus
 
 # Initialize repository instances
 university_repository = UniversityRepository()
@@ -65,7 +65,7 @@ class FlowController:
             reservation_date = datetime.strptime(reservation_date_str, "%Y-%m-%dT%H:%M:%S.%fZ")
 
             reservation_start = reservation_date
-            reservation_end = reservation_start + timedelta(hours=2)
+            reservation_end = reservation_start + timedelta(hours=3)
 
 
             reservation_system = ReservationManager()
@@ -104,32 +104,57 @@ class FlowController:
         except Exception as e:
             return jsonify({'error': f"An error ocucred: {str(e)}"}), 400
 
-
-    def filter_available_rooms(self, date_str: str, time_str: str, page: int, page_size: int):
+    def filter_available_rooms(self, date_str: str, time_str: str, page: int, page_size: int, room_name: str = ""):
         """
-            Recebe uma data e um horário e retorna uma lista de salas disponíveis,
-            removendo da lista de todas as salas aquelas com reservas que abrangem o horário informado.
-            Retorna os campos "id", "name" e "campus" de cada sala disponível.
+        Recebe uma data, um horário e opcionalmente um nome de sala, e retorna uma lista de salas disponíveis,
+        removendo da lista de todas as salas aquelas com reservas que abrangem o horário informado.
+        Retorna os campos "id", "name" e "campus" de cada sala disponível.
         """
         # Obter os 'IDs' das salas indisponíveis para o horário informado
         reservation_system = ReservationManager()
         unavailable_room_ids = reservation_system.find_unavailable_room_ids_by_date(date_str, time_str)
 
-        # Buscar todas as salas cadastradas no shared-resources, paginadas
-        all_rooms, pagination_config = self.find_all_rooms(page, page_size)
+        # Buscar todas as salas cadastradas no shared-resources, paginadas e filtradas por nome se fornecido
+        all_rooms, pagination_config = self.find_all_rooms(page, page_size, room_name)
+
+        # Buscar todos os campus para mapear os IDs para nomes
+        all_campus = FlowController.find_all_campus()
+        # Criar um dicionário para mapear campus_id para campus_name
+        campus_map = {campus["id"]: campus["name"] for campus in all_campus}
 
         # Filtrar as salas disponíveis: remover as que estão na lista de indisponíveis
         available_rooms = [
             {
                 "id": room.get("id"),
                 "name": room.get("name"),
-                "campus": room.get("campus")
+                "campus": campus_map.get(room.get("campus"), room.get("campus"))
+                # Substitui o ID pelo nome se disponível
             }
             for room in all_rooms
             if room.get("id") not in unavailable_room_ids
         ]
 
         return available_rooms, pagination_config
+
+    @staticmethod
+    def find_all_campus():
+        """
+        Busca todos os campus cadastrados no shared-resources.
+        :return: Lista de objetos campus com id e name.
+        """
+        try:
+            url = f"{os.getenv('URL_restapi')}/campus"
+            response = RestApiRequestMethods.get_request_simple(url)
+            if response.status_code != 200:
+                raise Exception("Erro ao buscar campus do shared-resources")
+            return response.json()
+        except Exception as e:
+            from SLL.py_log import AppLogger, LogType
+            AppLogger.log(
+                f"Erro ao buscar campus: {str(e)}",
+                LogType.ERROR,
+            )
+            return []
 
     def find_room_by_id(room_id: str):
         """
@@ -139,27 +164,47 @@ class FlowController:
         """
         try:
             url = f"{os.getenv('URL_restapi')}/rooms?room_id={room_id}"
-            response = requests.get(url)
+            response = RestApiRequestMethods.get_request_simple(url)
             if response.status_code != 200:
                 raise Exception("Erro ao buscar sala do shared-resources")
             return response.json()
         except Exception as e:
             return jsonify({'error': f"An error ocucred: {str(e)}"}), 400
 
-    def find_all_rooms(self, page: int, page_size: int):
+    def find_all_rooms(self, page: int, page_size: int, room_name: str = ""):
         """
-            Busca todas as salas cadastradas no shared-resources, utilizando paginação.
+            Busca todas as salas cadastradas no shared-resources, utilizando paginação
+            e opcionalmente filtrando por nome.
         """
         url = RestApiRequestMethods.generate_url("/rooms")
-        response = RestApiRequestMethods.get_request_page(url, page, page_size)
-        #if response.status_code != 200:
-       #     raise Exception("Erro ao buscar salas do shared-resources")
+
+        # Adiciona o parâmetro room_name à requisição se estiver presente
+        params = {"page": page, "page_size": page_size}
+        if room_name:
+            params["room_name"] = room_name
+
+        response = RestApiRequestMethods.get_request_with_params(url, params)
 
         rooms_json = response.json()
         # Se a resposta possuir paginação, os dados estarão no campo "data"
         all_rooms = rooms_json.get("data", rooms_json)
         pagination_config = rooms_json.get("pagination", {})
         return all_rooms, pagination_config
+
+    def find_campus_by_id(campus_id: str):
+        """
+        Busca campus cadastrada no shared-resources pelo Id
+        :param campus_id:
+        :return:
+        """
+        try:
+            url = f"{os.getenv('URL_restapi')}/campus?campus_id={campus_id}"
+            response = RestApiRequestMethods.get_request_simple(url)
+            if response.status_code != 200:
+                raise Exception("Erro ao buscar campus do shared-resources")
+            return response.json()
+        except Exception as e:
+            return jsonify({'error': f"An error occurred: {str(e)}"}), 400
 
     def find_types_by_collection(collection: str):
         """
@@ -244,7 +289,7 @@ class FlowController:
             return jsonify({'error': 'An error occurred while updating the event'}), 500
 
 
-    def event_data_build(data: Dict[str, Any]):
+    def event_data_build(data: Dict[str, Any]) -> dict:
         """
             Constrói o objeto de dados do evento com base nos dados recebidos.
 
@@ -264,6 +309,8 @@ class FlowController:
         teacher_email = data.get("userEmail")
         if not teacher_email:
             raise ValueError("User email is required")
+
+
         teacher_phone = data.get("telefone", "")
         teacher_name = teacher_email.split("@")[0]
         organizer = {
@@ -287,18 +334,20 @@ class FlowController:
             "extensionProject": data.get("projetoDesc", ""),
             "studentsMonitors": data.get("alunosMonitores", ""),
             "eventLogo": "",
-            "status": data.get("status", "requested"),
+            "status": data.get("status", EventStatus.DRAFT.value),
         }
 
     @staticmethod
-    def is_reserved(start_at:datetime,room_id: str)-> bool:
+    def is_reserved(start_at:str,room_id: str)-> bool:
         """
             Verifica se já existe uma reserva para a sala e horário informados.
             :param start_at: Horário de início da reserva.
             :param room_id: ID da sala a ser verificada.
             :return: True se já existe reserva, False caso contrário.
         """
-        start_at_limit = start_at + timedelta(hours=2)
+        # convert start_at to datetime object
+        start_at = datetime.strptime(start_at, "%Y-%m-%dT%H:%M:%S.%fZ")
+        start_at_limit = start_at + timedelta(hours=3)
         query = {
             "startAt": {
                 "$gte": start_at,

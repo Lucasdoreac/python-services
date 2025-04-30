@@ -1,3 +1,3 @@
 from .index import FlowController
 from .authentication import AuthenticationController
-from .send_emails import send_to_coordenacao, send_to_reitoria, send_event_status
+from .send_emails import send_to_coordenacao, send_to_reitoria, send_event_status, send_reservation_info_to_reitoria

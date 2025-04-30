@@ -6,7 +6,7 @@ from BLL import FlowController
 from .auth_decorators import token_required
 from .swagger_docs import get_swagger_specification
 from SLL.py_log import AppLogger,LogType,Logmessage
-from sr_requests_module.request_methods import GraphQlRequestMethods
+from .cluster_api.request_methods import GraphQlRequestMethods
 
 resources_bp = Blueprint('resources', __name__)
 
@@ -59,22 +59,31 @@ class ResourcesRoutes:
         time_str = request.args.get("time")
         page = request.args.get("page", 1, type=int)
         page_size = request.args.get("page_size", 10, type=int)
+        room_name = request.args.get("room_name", "")
 
         if not date_str or not time_str:
             return jsonify({"error": "Parâmetros 'date' e 'time' são obrigatórios."}), 400
 
         try:
-            available_rooms, pagination_config = FlowController().filter_available_rooms(date_str, time_str, page, page_size)
+            available_rooms, pagination_config = FlowController().filter_available_rooms(date_str, time_str, page, page_size, room_name)
             return jsonify({"data": available_rooms, "pagination": pagination_config}), 200
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            AppLogger.log(
+                message=Logmessage.INTERNAL_APIS_CRASHED,
+                log_type=LogType.ERROR,
+                ip_address=request.remote_addr,
+                payload=request.data,
+                endpoint=request.path,
+                error=str(e),
+            )
+            return jsonify({"error": "Impossível fazer essa pesquisa de sala"}), 500
 
     @staticmethod
     @resources_bp.route('/rooms', methods=['GET'])
     @token_required
     def get_rooms_by_id():
         try:
-            room_id = request.args.get("collection")
+            room_id = request.args.get("roomId")
             room_obj = FlowController.find_room_by_id(room_id)
             return room_obj, 200
         except Exception as e:

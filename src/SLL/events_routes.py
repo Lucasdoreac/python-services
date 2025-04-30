@@ -1,10 +1,12 @@
 from flask import Blueprint, jsonify, request, make_response
 from flasgger import swag_from
+
+from utils.enums import EventStatus
 from .swagger_docs import get_swagger_specification
 from BLL import FlowController,pdf
 from .auth_decorators import token_required
 from SLL.py_log import AppLogger,LogType,Logmessage
-from BLL import send_to_coordenacao
+from BLL import send_to_coordenacao, send_reservation_info_to_reitoria
 
 
 # Define your Flask Blueprint
@@ -58,13 +60,6 @@ class EventsRoutes:
     def get_events():
         try:
             user_email = request.headers.get('email')
-            if not user_email:
-                AppLogger.log(
-                    "Parâmetro userEmail não informado.",
-                    LogType.WARNING,
-                    ip_address=request.remote_addr,
-                )
-                return jsonify({'error': 'Parâmetro userEmail é obrigatório'}), 400
 
             events = FlowController.find_events_by_user_email(user_email)
             if not events:
@@ -113,20 +108,26 @@ class EventsRoutes:
             return jsonify({'error': 'Missing data'}), 400
 
         user_email = request.headers.get('email')
-        if not user_email:
-            return jsonify({'error': 'Missing user email in headers'}), 400
 
         data['userEmail'] = user_email
 
         result = FlowController.update_event(event_id, data)
 
         try:
-            if data['status'] == 'requested':
-                pdf.generate_event_pdf(event_id=data['eventId'])
-                send_to_coordenacao(event_id=data['eventId'])
+            if data['status'] == 'requested': # flag que o front-end envia quando o evento é solicitado
+                # Enviar informação sobre evento ou reserva simples
+                if data['classificacao'] in ['lecture', 'workshop']:
+                    data['status'] = EventStatus.WAITING.value
+                    pdf.generate_event_pdf(event_id=data['eventId'])
+                    send_to_coordenacao(event_id=data['eventId'])
+                elif data['classificacao'] in ['class', 'exam']:
+                    data['status'] = EventStatus.DIRECT_APPROVAL.value
+                    FlowController.update_event(event_id, data)
+                    send_reservation_info_to_reitoria(event_id=data['eventId'])
+                result = FlowController.update_event(event_id, data)
         except Exception as e:
             AppLogger.log(
-                f"Erro ao gerar PDF do evento {data['eventId']}: {e}",
+                f"Erro ao começar processo de aprovação (status = requested) {data['eventId']}",
                 LogType.ERROR,
                 ip_address=request.remote_addr,
             )

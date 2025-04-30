@@ -6,7 +6,17 @@ from SLL import AppLogger, Logmessage, LogType
 
 
 class RestApiRequestMethods:
-    
+
+    @staticmethod
+    def get_request_with_params(url, params):
+        """
+        Faz uma requisição GET com parâmetros para a API externa
+        """
+        response = requests.get(url, params=params)
+        if response.status_code != 200:
+            raise Exception(f"Erro ao fazer requisição para {url}: {response.status_code}")
+        return response
+
     @staticmethod
     def get_request_simple(url):
         response = requests.get(url)
@@ -212,7 +222,7 @@ class GraphQlRequestMethods:
         return room
 
     @staticmethod
-    def get_course_by_id(graduationId: int)-> list:
+    def get_course_by_id(graduationId: str)-> list:
         if graduationId:
             query = f"""
             query{{
@@ -228,8 +238,10 @@ class GraphQlRequestMethods:
             AppLogger.log(
                 Logmessage.ID_NOT_INFORMED,
                 LogType.ERROR,
+                collection="courses",
+                id=graduationId,
             )
-            raise Exception("ID não informado ou nulo!")
+            raise Exception("ID de curso não informado ou nulo!")
 
 
         response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})
@@ -238,7 +250,7 @@ class GraphQlRequestMethods:
         return course
 
     @staticmethod
-    def get_teachers_by_id(teacherId: int)-> list:
+    def get_teachers_by_id(teacherId: str)-> list:
         if teacherId:
             query = f"""
             query{{
@@ -254,8 +266,10 @@ class GraphQlRequestMethods:
             AppLogger.log(
                 Logmessage.ID_NOT_INFORMED,
                 LogType.ERROR,
+                collection="teachers",
+                id=teacherId,
             )
-            raise Exception("ID não informado ou nulo!")
+            raise Exception("ID de professor não informado ou nulo!")
 
 
         response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})

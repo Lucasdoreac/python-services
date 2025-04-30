@@ -1,7 +1,9 @@
-from enum import Enum
 from typing import Dict, Any
+from datetime import datetime, timedelta
+
+from SLL import AppLogger, LogType, Logmessage
 from .mongodb_factory import MongoDBConnectionFactory
-from datetime import datetime
+from utils.enums import EventStatus
 
 
 class ReservationManager:
@@ -49,7 +51,7 @@ class ReservationManager:
             "eventId": event_id,  # Armazena o eventId no documento
             "startAt": reservation_start_time,
             "endAt": reservation_end_time,
-            "status": "requested"
+            "status": EventStatus.WAITING.value,
         }
 
         self.reservation_collection.insert_one(reservation)
@@ -67,10 +69,16 @@ class ReservationManager:
             reservation_datetime = datetime.combine(date_obj, time_obj)
 
             # Consulta: busca reservas onde o momento informado esteja entre startAt e endAt
+            # e que não tenham sido rejeitadas pela reitoria e nem pela coordenação
             query = {
-                "startAt": {"$lte": reservation_datetime},
-                "endAt": {"$gte": reservation_datetime}
+                "startAt": {"$lt": reservation_datetime + timedelta(hours=3)},
+                "endAt": {"$gt": reservation_datetime},
+                "status": {"$nin": [
+                    EventStatus.REJECTED_BY_REITORIA.value,
+                    EventStatus.REJECTED_BY_COORDENACAO.value
+                ]}
             }
+
             # Projeção para retornar apenas o campo "roomId"
             projection = {"roomId": 1, "_id": 0}
 
@@ -103,7 +111,7 @@ class ReservationManager:
 
     def update_event(self, event_id: str, event_data: Dict[str, Any]):
         """
-        Atualiza um evento existente na coleção de eventos.
+        Atualiza um evento existente na coleção de eventos e atualizar o status da reserva.
 
         Args:
             event_id (str): ID do evento a ser atualizado.
@@ -121,12 +129,20 @@ class ReservationManager:
                 {"_id": ObjectId(event_id)},
                 {"$set": event_data}
             )
+            self.reservation_collection.update_one(
+                {"eventId": event_id},
+                {"$set": {"status": event_data.get("status")}}
+            )
             if result.modified_count > 0:
                 return event_id
             else:
                 # Se nenhum documento foi modificado, pode significar que os dados são idênticos
                 return event_id
         except Exception as e:
+            # log the error
+            AppLogger.log(Logmessage.UPDATING_EVENT_STATUS, LogType.ERROR,
+                          event_id=event_id, reservation_id=event_data.get("reservationId"),
+                          status=event_data.get("status"))
             raise e
 
     def insert_pdf(self, pdf_data):

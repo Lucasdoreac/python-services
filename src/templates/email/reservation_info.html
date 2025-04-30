@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Nova Reserva Criada</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #003366;
+            color: white;
+            padding: 15px;
+            text-align: center;
+        }
+        .content {
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        .info-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .info-table td {
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+        }
+        .info-table tr:last-child td {
+            border-bottom: none;
+        }
+        .label {
+            font-weight: bold;
+            width: 150px;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 12px;
+            color: #777;
+        }
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #003366;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 15px 0;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>Nova Reserva Criada</h2>
+        </div>
+        <div class="content">
+            <p>Prezada Reitoria,</p>
+            <p>Uma nova reserva foi criada no sistema. Seguem as informações básicas:</p>
+
+            <table class="info-table">
+                <tr>
+                    <td class="label">Organizador:</td>
+                    <td>{{ organizer_name }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Email:</td>
+                    <td>{{ organizer_email }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Classificação:</td>
+                    <td>{{ classification }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Sala:</td>
+                    <td>{{ room_name }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Campus:</td>
+                    <td>{{ room_campus }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Data da Reserva:</td>
+                    <td>{{ reservation_date }}</td>
+                </tr>
+            </table>
+
+        </div>
+        <div class="footer">
+            <p>Esta é uma mensagem automática do Sistema de Reservas. Por favor, não responda a este email.</p>
+        </div>
+    </div>
+</body>
+</html>

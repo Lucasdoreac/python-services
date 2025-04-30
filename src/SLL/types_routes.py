@@ -3,7 +3,7 @@ import requests
 from flask import Blueprint, jsonify, request
 from flasgger import swag_from
 
-from sr_requests_module.request_methods import GraphQlRequestMethods
+from .cluster_api.request_methods import GraphQlRequestMethods
 from . import AppLogger, Logmessage, LogType
 from .swagger_docs import get_swagger_specification
 from .auth_decorators import token_required
