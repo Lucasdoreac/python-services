@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Edição Requisitada</title>
+    <title>Edição Requisitada pelo Coordenador</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -59,7 +59,7 @@
         {{ mensagem }}
     </div>
 
-    <a href="/" style="background-color: #28a745; border: none; border-radius: 25px; padding: 10px 40px; color: #fff; font-size: 16px; text-decoration: none; display: inline-block;">Ok</a>
+    <a href="{{  os.getenv('REACT_APP') }}/event/type-selection?eventId={{ event_id }}" style="background-color: #28a745; border: none; border-radius: 25px; padding: 10px 40px; color: #fff; font-size: 16px; text-decoration: none; display: inline-block;">Ok</a>
 
     </div>
 

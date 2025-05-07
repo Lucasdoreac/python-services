@@ -1,7 +1,7 @@
 import os
 from flask import Blueprint, request, jsonify, render_template
 from BLL import send_to_reitoria, send_to_coordenacao, send_event_status
-from BLL.send_emails import verify_token_from_email, apply_token_action,changes
+from BLL.send_emails import verify_token_from_email, apply_token_action,send_changes_request
 from functools import wraps
 # Create a blueprint for handling templates and related routes.
 templates_bp = Blueprint('templates_bp', __name__, template_folder='../templates')
@@ -74,7 +74,7 @@ def request_changes():
     who = request.args.get('who')
     token = request.args.get('tokenId')
 
-    return changes(eventId, who, token)
+    return send_changes_request(eventId, who, token)
 
 @templates_bp.route('/store_changes', methods=['POST'])
 def store_changes():

@@ -45,7 +45,7 @@ def send_to_coordenacao(event_id):
 
     # Example links (adjust to your routes)
     with current_app.test_request_context():
-        request_changes_link = url_for('templates_bp.request_changes', eventId=event_id, tokenId=tokenId,who='coordenacao', _external=True)
+        request_changes_link = url_for('templates_bp.request_changes', eventId=event_id, tokenId=tokenId,_external=True)
         approve_link = url_for('templates_bp.approve', eventId=event_id, tokenId=tokenId, who='coordenacao', _external=True)
         reject_link = url_for('templates_bp.reject', eventId=event_id, tokenId=tokenId, who='coordenacao', _external=True)
 
@@ -230,22 +230,19 @@ def send_event_status(event_id, is_approved: bool, who: str, token:str):
     response = requests.post(url, json=payload, headers=headers)
     return response
 
-def changes(event_id, who: str, token:str):
+def send_changes_request(event_id, token:str) -> requests.Response:
     AppLogger.log(
         Logmessage.EVENT_REQUESTED_CHANGES_BY,
         LogType.INFO,
         event_id=event_id,
         action='Request Changes',
-        who=who,
         token=token)
 
-    if who == 'coordenacao':
-        apply_token_action(0, "Request Changes", event_id, token)
-        event_status = EventStatus.REQUESTED_CHANGE.value
-    else:
-        apply_token_action(1, "Request Changes", event_id, token)
-        event_status = EventStatus.REQUESTED_CHANGE.value
+    #Aplication of action and change status on DB
+    apply_token_action(0, "Request Changes", event_id, token)
+    event_status = EventStatus.REQUESTED_CHANGE.value
 
+    #Find event by event_id
     event = events_repository.find_by_id(event_id)
     email = event["organizer"]["email"]
     event.pop("_id", None)
@@ -257,7 +254,8 @@ def changes(event_id, who: str, token:str):
 
     # Render the template with the appropriate data
     html_content = render_template(
-        "email/mudanças.html",
+        "email/mudancas.html",
+        event_id=event_id,
     )
     if os.getenv("FLASK_ENV") == "development":
         return html_content
