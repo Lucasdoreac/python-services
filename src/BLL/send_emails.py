@@ -50,13 +50,27 @@ def send_to_coordenacao(event_id):
         reject_link = url_for('templates_bp.reject', eventId=event_id, tokenId=tokenId, who='coordenacao', _external=True)
 
     course_id = FlowController.find_event_by_event_id(event_id)
-    coordinator_id = get_coordinator_by_graduation_id(course_id['graduationId'])
+    coordinator_id = get_coordinator_by_graduation_id(course_id.get('graduationId'))
     teacher_email = find_teacher_email_by_id(coordinator_id)
     # Lista local por chamada: emails["coordenacao"] é global e compartilhada
     # entre todas as requisições. Um .append() nela (como havia antes)
     # acumulava o coordenador de cada evento anterior para sempre, vazando
     # destinatário de um evento para o email de outro.
-    coordenacao_recipients = emails["coordenacao"] + [teacher_email]
+    #
+    # Guarda: curso sem coordenador cadastrado, ou coordenador sem professor
+    # correspondente, não deve derrubar o fluxo com 500 (era o que acontecia
+    # antes, via IndexError/KeyError em get_coordinator_by_graduation_id e
+    # find_teacher_email_by_id). Cai para a caixa padrão de Coordenação
+    # (emails["coordenacao"]) e segue o envio normalmente.
+    if teacher_email:
+        coordenacao_recipients = emails["coordenacao"] + [teacher_email]
+    else:
+        AppLogger.log(
+            f"Evento {event_id}: sem coordenador identificável (curso {course_id.get('graduationId')}); "
+            "usando caixa padrão de Coordenação.",
+            LogType.WARNING,
+        )
+        coordenacao_recipients = list(emails["coordenacao"])
 
     # Render the template with the appropriate data
     html_content = render_template(
@@ -378,21 +392,39 @@ def create_send_email_token(event_id: str,step: EmailStep)-> str:
     reservation_manager.insert_send_email(tokenId, step.value, event_id)
     return tokenId
 
-def get_coordinator_by_graduation_id(graduationId: str)-> str:
-    course = GraphQlRequestMethods.get_course_by_id(graduationId)
-    course = course[0]
-    return course['coordinator']
-
-def find_teacher_email_by_id(teacherId: str) -> str:
+def get_coordinator_by_graduation_id(graduationId: str):
     """
-    Find a teacher's name by their ID.
+    Retorna o id do coordenador do curso, ou None se o curso não existir ou
+    não tiver coordenador cadastrado.
+
+    Antes, course[0] e course['coordinator'] estouravam IndexError/KeyError
+    nesses casos, virando um 500 pra quem chamou (send_to_coordenacao).
+    """
+    if not graduationId:
+        AppLogger.log(Logmessage.COURSES_NOT_FOUND, LogType.WARNING, ip_address=None)
+        return None
+    course = GraphQlRequestMethods.get_course_by_id(graduationId)
+    if not course:
+        AppLogger.log(Logmessage.COURSES_NOT_FOUND, LogType.WARNING, ip_address=None)
+        return None
+    return course[0].get('coordinator') or None
+
+def find_teacher_email_by_id(teacherId: str):
+    """
+    Find a teacher's email by their ID.
 
     Args:
         id (str): The teacher's ID.
 
     Returns:
-        str: The teacher's email.
+        str | None: O email do professor, ou None se o id for vazio/nulo ou
+        não corresponder a nenhum professor cadastrado (antes, teacher[0]
+        estourava IndexError nesse caso).
     """
+    if not teacherId:
+        return None
     teacher = GraphQlRequestMethods.get_teachers_by_id(teacherId)
-    teacher = teacher[0]
-    return teacher['email']
+    if not teacher:
+        AppLogger.log(Logmessage.TEACHERS_NOT_FOUND, LogType.WARNING, ip_address=None)
+        return None
+    return teacher[0].get('email') or None

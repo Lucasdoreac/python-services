@@ -126,8 +126,11 @@ class EventsRoutes:
                     send_reservation_info_to_reitoria(event_id=data['eventId'])
                 result = FlowController.update_event(event_id, data)
         except Exception as e:
+            # Antes o "e" era capturado e nunca usado: qualquer erro nesse
+            # bloco (ex.: PDF, email) ficava sem nenhum rastro no log, e a
+            # resposta seguia 200 com o "result" desatualizado (status antigo).
             AppLogger.log(
-                f"Erro ao começar processo de aprovação (status = requested) {data['eventId']}",
+                f"Erro ao começar processo de aprovação (status = requested) {data['eventId']}: {e}",
                 LogType.ERROR,
                 ip_address=request.remote_addr,
             )
