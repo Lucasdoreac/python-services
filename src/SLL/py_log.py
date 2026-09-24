@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import logging.config
 from enum import Enum
@@ -70,10 +71,20 @@ class LogType(Enum):
     CRITICAL = logging.CRITICAL
 
 
+def mask_token(token) -> str:
+    """Impressão digital curta do token: correlaciona linhas do log sem
+    permitir reusar o token (login por magic link e aprovação por e-mail)."""
+    if not token:
+        return "-"
+    return "sha256:" + hashlib.sha256(str(token).encode()).hexdigest()[:8]
+
+
 class AppLogger:
 
     @staticmethod
     def log(message: Logmessage | str, log_type: LogType, **kwargs):
+        if "token" in kwargs:
+            kwargs["token"] = mask_token(kwargs["token"])
         try:
             current_date = datetime.timestamp(datetime.now())
             timestamp = datetime.timestamp(datetime.now())

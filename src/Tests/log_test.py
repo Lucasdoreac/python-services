@@ -3,6 +3,11 @@ import pytest
 import logging
 from src.SLL.py_log import AppLogger,LogType,Logmessage
 from src import get_config
+import hashlib
+
+
+def fingerprint(token):
+    return "sha256:" + hashlib.sha256(token.encode()).hexdigest()[:8]
 
 
 #TEST TOKEN FAILURE
@@ -22,8 +27,11 @@ def teste_log_token_successfully(caplog):
     assert len(caplog.records) == 1
     log_record = caplog.records[0]
     assert log_record.levelname == "INFO"
-    expected_message = "Token validation failed; email: udf@udf.com; token: 12345; IP: localhost;"
+    # O token nunca vai em claro para o log: só uma impressão digital curta,
+    # que permite correlacionar linhas sem permitir reusar o token.
+    expected_message = f"Token validation failed; email: udf@udf.com; token: {fingerprint('12345')}; IP: localhost;"
     assert  expected_message in log_record.message
+    assert "12345" not in log_record.message
 
 
 def teste_log_token_failure(caplog):
@@ -94,8 +102,9 @@ def teste_missing_email_successfully(caplog):
     assert len(caplog.records) == 1
     log_record = caplog.records[0]
     assert log_record.levelname == "INFO"
-    expected_message = "Email missing; email: token: 1234; IP: localhost"
+    expected_message = f"Email missing; email: token: {fingerprint('1234')}; IP: localhost"
     assert expected_message in log_record.message
+    assert "1234;" not in log_record.message
 
 
 #INVALID EMAIL DOMAIN
@@ -327,3 +336,29 @@ def teste_rooms_not_found(caplog):
     assert log_record.levelname == "ERROR"
     expected_message = "Erro na formatação da mensagem de log:'ip_address'"
     assert expected_message in log_record.message
+
+SECRET = "tok-9f8e7d6c5b4a-segredo"
+
+
+@pytest.mark.parametrize("message, extra", [
+    (Logmessage.TOKEN_VALIDATED, {"email": "a@udf.edu.br", "ip_address": "1.2.3.4"}),
+    (Logmessage.TOKEN_FAILURE, {"email": "a@udf.edu.br", "ip_address": "1.2.3.4"}),
+    (Logmessage.MISSING_EMAIL, {"ip_address": "1.2.3.4"}),
+    (Logmessage.SENDING_EMAIL, {"email": "a@udf.edu.br", "event": "ev1"}),
+    (Logmessage.EVENT_APPROVED_REJECTED_BY, {"event_id": "ev1", "action": "approved", "who": "reitoria"}),
+])
+def test_no_log_message_writes_the_raw_token(caplog, message, extra):
+    # Login (magic link) e aprovação (link do e-mail) são tokens que dão acesso:
+    # quem lê o py_log.log não pode conseguir reusá-los (SEC-03).
+    with caplog.at_level(logging.INFO):
+        AppLogger.log(message, LogType.INFO, token=SECRET, **extra)
+
+    assert SECRET not in caplog.text
+    assert fingerprint(SECRET) in caplog.text
+
+
+def test_missing_token_is_logged_as_dash(caplog):
+    with caplog.at_level(logging.INFO):
+        AppLogger.log(Logmessage.TOKEN_FAILURE, LogType.INFO, token=None, email="a@udf.edu.br", ip_address="x")
+
+    assert "token: -;" in caplog.text
