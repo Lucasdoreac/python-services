@@ -19,6 +19,20 @@ class SendEmailrepository(BaseRepository):
         collection = self.get_collection_name()
         return collection.update_one(query, updated_fields)
 
+    def deactivate_active_for_event_step(self, eventId: str, step: int, updated_fields: dict):
+        """Desativa todo token ainda 'active' desse (evento, etapa).
+
+        Usado antes de emitir um token novo pro mesmo (eventId, step): sem
+        isso, cada token anterior (ex.: de uma visita anterior à tela de
+        aprovação) fica 'active' pra sempre e pode ser reaproveitado depois
+        -- token de aprovação deixa de ser de uso único.
+        """
+        collection = self.get_collection_name()
+        return collection.update_many(
+            {"eventId": eventId, "step": step, "active": True},
+            updated_fields,
+        )
+
     def get_send_email_by_token_id(self, tokenId: str):
         return self.find_all({"tokenId": tokenId})
 

@@ -178,3 +178,102 @@ class TestSendToCoordenacaoWithoutCoordinator:
 
         assert len(captured_payloads) == 1
         assert captured_payloads[0]["to"] == ", ".join(send_emails.emails["coordenacao"])
+
+
+class TestApprovalTokenSingleUse:
+    """Regressão issue #65: token do email de aprovação não é de uso único.
+
+    Achado com dados reais do dev-local: cada visita a
+    /administration_approval mintava um token novo pro mesmo (eventId,
+    step) e abandonava o anterior, que ficava active para sempre e podia
+    ser reaproveitado depois -- inclusive já com o evento decidido por
+    outro token.
+    """
+
+    def test_verify_token_returns_false_for_unknown_token(self, monkeypatch, app):
+        from BLL import send_emails
+
+        # Antes: sem registro nenhum, a função "caía pro final" sem return
+        # -> None. check_request só barrava `is False`, então um tokenId
+        # forjado/inexistente passava pelo guard (`None is False` é False).
+        assert send_emails.verify_token_from_email("token-que-nunca-existiu") is False
+
+    def test_verify_token_true_while_event_still_pending_for_that_step(self, monkeypatch, app):
+        from BLL import send_emails
+        from utils.enums import EmailStep, EventStatus
+
+        token = send_emails.create_send_email_token("event-1", EmailStep.COORDENACAO)
+        monkeypatch.setattr(
+            send_emails.FlowController,
+            "find_event_by_event_id",
+            staticmethod(lambda event_id: {"status": EventStatus.WAITING.value}),
+        )
+
+        assert send_emails.verify_token_from_email(token) is True
+
+    def test_verify_token_false_once_event_already_decided(self, monkeypatch, app):
+        """O token continua 'active' no banco, mas o evento já saiu do
+        status que essa etapa decide (decidido por outro caminho/token) --
+        não pode mais valer."""
+        from BLL import send_emails
+        from utils.enums import EmailStep, EventStatus
+
+        token = send_emails.create_send_email_token("event-1", EmailStep.COORDENACAO)
+        monkeypatch.setattr(
+            send_emails.FlowController,
+            "find_event_by_event_id",
+            staticmethod(lambda event_id: {"status": EventStatus.APPROVED_BY_COORDENACAO.value}),
+        )
+
+        assert send_emails.verify_token_from_email(token) is False
+
+    def test_creating_a_new_token_invalidates_the_previous_orphan_for_same_event_step(self, monkeypatch, app):
+        """Reproduz o achado direto: /administration_approval remintando o
+        token a cada visita não pode deixar o anterior 'active' pra
+        sempre."""
+        from BLL import send_emails
+        from utils.enums import EmailStep, EventStatus
+
+        monkeypatch.setattr(
+            send_emails.FlowController,
+            "find_event_by_event_id",
+            staticmethod(lambda event_id: {"status": EventStatus.WAITING.value}),
+        )
+
+        first_token = send_emails.create_send_email_token("event-1", EmailStep.COORDENACAO)
+        assert send_emails.verify_token_from_email(first_token) is True
+
+        second_token = send_emails.create_send_email_token("event-1", EmailStep.COORDENACAO)
+
+        assert first_token != second_token
+        assert send_emails.verify_token_from_email(first_token) is False
+        assert send_emails.verify_token_from_email(second_token) is True
+
+    def test_creating_a_new_token_does_not_touch_other_events_or_steps(self, monkeypatch, app):
+        from BLL import send_emails
+        from utils.enums import EmailStep, EventStatus
+
+        # Um único mock, indexado por event_id, pra cada evento manter seu
+        # próprio status coerente independente da ordem das chamadas abaixo
+        # (senão sobrescrever o mock a cada create_send_email_token faria a
+        # verificação final usar sempre o último status, não o de cada
+        # evento no momento em que seu token foi criado).
+        statuses = {
+            "event-other": EventStatus.WAITING.value,
+            "event-1": EventStatus.APPROVED_BY_COORDENACAO.value,
+        }
+        monkeypatch.setattr(
+            send_emails.FlowController,
+            "find_event_by_event_id",
+            staticmethod(lambda event_id: {"status": statuses[event_id]}),
+        )
+
+        other_event_token = send_emails.create_send_email_token("event-other", EmailStep.COORDENACAO)
+        other_step_token = send_emails.create_send_email_token("event-1", EmailStep.REITORIA)
+
+        # Emitir um novo token de COORDENACAO pro event-1 não pode desativar
+        # o token de outro evento, nem o de outra etapa do mesmo evento.
+        send_emails.create_send_email_token("event-1", EmailStep.COORDENACAO)
+
+        assert send_emails.verify_token_from_email(other_event_token) is True
+        assert send_emails.verify_token_from_email(other_step_token) is True

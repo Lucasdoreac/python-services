@@ -346,13 +346,40 @@ def send_event_status(event_id, is_approved: bool, who: str, token:str):
     response = requests.post(url, json=payload, headers=headers)
     return response
 
-def verify_token_from_email(tokenId) -> bool:
-    data = send_email_repository.get_send_email_by_token_id(tokenId)
+# Enquanto o token está active, qual status o evento precisa ter pra essa
+# etapa ainda estar de fato pendente. Se o evento já saiu desse status (foi
+# decidido por outro caminho -- outro token, outra aba, um clique
+# anterior), um token "active" órfão não deve mais funcionar.
+_PENDING_EVENT_STATUS_BY_STEP = {
+    EmailStep.COORDENACAO.value: EventStatus.WAITING.value,
+    EmailStep.REITORIA.value: EventStatus.APPROVED_BY_COORDENACAO.value,
+}
 
-    for record in data:
-        if tokenId == record.get("tokenId") and record.get("active") is True:
-            return True
+
+def verify_token_from_email(tokenId) -> bool:
+    """
+    Token de aprovação é de uso único: só é válido se (a) existe, (b) está
+    active, e (c) o evento que ele decide ainda está pendente nessa etapa.
+
+    Antes: sem (a) tratado, tokenId inexistente fazia a função "cair pro
+    final" sem return -> None; e o guard em check_request só barrava
+    `is False`, então `None is False` deixava passar um token forjado. E
+    sem (c), um token que ficou "active" órfão (ex.: de uma visita anterior
+    a /administration_approval, que sempre emitia um token novo) continuava
+    válido pra aprovar/rejeitar mesmo depois do evento já ter sido decidido.
+    """
+    records = send_email_repository.get_send_email_by_token_id(tokenId)
+    record = next((r for r in records if r.get("tokenId") == tokenId), None)
+
+    if record is None or record.get("active") is not True:
         return False
+
+    expected_status = _PENDING_EVENT_STATUS_BY_STEP.get(record.get("step"))
+    if expected_status is None:
+        return True
+
+    event = FlowController.find_event_by_event_id(record.get("eventId"))
+    return bool(event) and event.get("status") == expected_status
 
 def apply_token_action(step: int, action:str, eventId:str, tokenId: str) -> None:
     """"
@@ -386,6 +413,15 @@ def apply_token_action(step: int, action:str, eventId:str, tokenId: str) -> None
 send_email_repository = SendEmailrepository()
 
 def create_send_email_token(event_id: str,step: EmailStep)-> str:
+    # Uso único: qualquer token ainda "active" pra esse (evento, etapa) fica
+    # órfão e reutilizável pra sempre assim que um novo é emitido (ex.: cada
+    # visita a /administration_approval mintava um token novo, abandonando
+    # o anterior). Desativa antes de criar o próximo.
+    send_email_repository.deactivate_active_for_event_step(
+        event_id,
+        step.value,
+        {'$set': {'active': False, 'update_at': datetime.now()}},
+    )
     now = datetime.now()
     tokenId = sha256(str(now).encode()).hexdigest()
     reservation_manager = ReservationManager()
