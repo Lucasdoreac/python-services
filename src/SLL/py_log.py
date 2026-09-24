@@ -40,10 +40,15 @@ class Logmessage(Enum):
     FAILED_SEND_EMAIL = "Email sender service unavailable: failed to send email; IP: {ip_address}; Email: {email};"
     SENDING_EMAIL = "Sending email; email: {email}; event: {event}; token: {token};"
     EVENT_APPROVED_REJECTED_BY = "Event {event_id} {action} by {who}; token: {token};"
-    MISSING_DATA = "Missing data;IP: {ip_address} ;"
-    EVENTS_NOT_FOUND = "Events not found; IP: {ip_address} ;"
+    # Padronizado no formato "<mensagem>; IP: {ip_address};" -- já era o
+    # formato usado pela maioria dos membros abaixo; MISSING_DATA e
+    # EVENTS_NOT_FOUND tinham espaçamento divergente (sem espaço antes de
+    # "IP:", com espaço extra antes do ";" final), corrigido aqui.
+    MISSING_DATA = "Missing data; IP: {ip_address};"
+    EVENTS_NOT_FOUND = "Events not found; IP: {ip_address};"
     RESERVATION_NOT_FOUND = "Reservation not found; IP: {ip_address};"
     UPDATING_EVENT_STATUS = "Updating event status; event_id: {event_id}; reservation_id: {reservation_id} status: {status};"
+    BUILDING_NOT_FOUND = "Building not found; IP: {ip_address};"
     ROOMS_NOT_FOUND = "Rooms not found; IP: {ip_address};"
     CAMPUS_NOT_FOUND = "Campus not found; IP: {ip_address};"
     COURSES_NOT_FOUND = "Courses not found; IP: {ip_address};"

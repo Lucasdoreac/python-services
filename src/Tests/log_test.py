@@ -136,17 +136,19 @@ def teste_invalid_email_domain_failure(caplog):
 #FAILED SEND EMAIL
 def teste_failed_send_email_successfully(caplog):
     remote_addr = 'localhost'
+    email = 'udf@udf.com'
     with caplog.at_level(logging.INFO):
         AppLogger.log(
             Logmessage.FAILED_SEND_EMAIL,
             LogType.INFO,
             ip_address=remote_addr,
+            email=email,
         )
 
     assert len(caplog.records) == 1
     log_record = caplog.records[0]
     assert log_record.levelname == "INFO"
-    expected_message = "Email sender service unavailable: failed to send email;IP: localhost"
+    expected_message = "Email sender service unavailable: failed to send email; IP: localhost; Email: udf@udf.com;"
     assert expected_message in log_record.message
 
 
@@ -178,7 +180,7 @@ def teste_missing_data_successfully(caplog):
     assert len(caplog.records) == 1
     log_record = caplog.records[0]
     assert log_record.levelname == "INFO"
-    expected_message = "Missing data;IP: localhost ;"
+    expected_message = "Missing data; IP: localhost;"
     assert expected_message in log_record.message
 
 
@@ -210,7 +212,7 @@ def teste_events_not_found_successfully(caplog):
     assert len(caplog.records) == 1
     log_record = caplog.records[0]
     assert log_record.levelname == "INFO"
-    expected_message = "Events not found;IP: localhost ;"
+    expected_message = "Events not found; IP: localhost;"
     assert expected_message in log_record.message
 
 
@@ -231,10 +233,12 @@ def teste_events_not_found_failure(caplog):
 
 #RESERVETION NOT FOUND
 def teste_reservation_not_found_successfully(caplog):
+    # Antes chamava Logmessage.EVENTS_NOT_FOUND por copy-paste -- o nome do
+    # teste diz "reservation", e Logmessage.RESERVATION_NOT_FOUND já existe.
     remote_addr = "localhost"
     with caplog.at_level(logging.INFO):
         AppLogger.log(
-            Logmessage.EVENTS_NOT_FOUND,
+            Logmessage.RESERVATION_NOT_FOUND,
             LogType.INFO,
             ip_address=remote_addr,
         )
@@ -242,7 +246,7 @@ def teste_reservation_not_found_successfully(caplog):
     assert len(caplog.records) == 1
     log_record = caplog.records[0]
     assert log_record.levelname == "INFO"
-    expected_message = "Events not found;IP: localhost ;"
+    expected_message = "Reservation not found; IP: localhost;"
     assert expected_message in log_record.message
 
 
@@ -250,7 +254,7 @@ def teste_reservation_not_found_failure(caplog):
     remote_addr = "localhost"
     with caplog.at_level(logging.INFO):
         AppLogger.log(
-            Logmessage.EVENTS_NOT_FOUND,
+            Logmessage.RESERVATION_NOT_FOUND,
             LogType.INFO,
         )
 
@@ -274,7 +278,7 @@ def teste_building_not_found_successfully(caplog):
     assert len(caplog.records) == 1
     log_record = caplog.records[0]
     assert log_record.levelname == "INFO"
-    expected_message = "Building not found;IP: localhost ;"
+    expected_message = "Building not found; IP: localhost;"
     assert expected_message in log_record.message
 
 
@@ -306,7 +310,7 @@ def teste_rooms_not_found_successfully(caplog):
     assert len(caplog.records) == 1
     log_record = caplog.records[0]
     assert log_record.levelname == "INFO"
-    expected_message = "Rooms not found;IP: localhost ;"
+    expected_message = "Rooms not found; IP: localhost;"
     assert expected_message in log_record.message
 
 

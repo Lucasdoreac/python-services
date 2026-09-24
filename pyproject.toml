@@ -29,6 +29,11 @@ flasgger = "^0.9.7.1"
 typst = "^0.13.2"
 minio = "^7.2.15"
 gunicorn = "^23.0.0"
+# src/SLL/sendblue.py importa isso, mas nunca foi declarado aqui -- o
+# dev-local vinha instalando via pip ad-hoc no `command:` do compose,
+# sem pinar versão nem refletir no lockfile. Descoberto ao escrever o
+# Dockerfile (poetry install --no-root não instala nada não declarado).
+sib-api-v3-sdk = "*"
 
 
 [build-system]
