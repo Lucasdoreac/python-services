@@ -22,7 +22,7 @@ def teste_log_token_successfully(caplog):
     assert len(caplog.records) == 1
     log_record = caplog.records[0]
     assert log_record.levelname == "INFO"
-    expected_message = "Token validation failed; email: udf@udf.com; token: 12345; IP: localhost;"
+    expected_message = "Token validation failed; email: udf@udf.com; token: sha256:5994471a; IP: localhost;"
     assert  expected_message in log_record.message
 
 
@@ -94,7 +94,7 @@ def teste_missing_email_successfully(caplog):
     assert len(caplog.records) == 1
     log_record = caplog.records[0]
     assert log_record.levelname == "INFO"
-    expected_message = "Email missing; email: token: 1234; IP: localhost"
+    expected_message = "Email missing; email: token: sha256:03ac6742; IP: localhost"
     assert expected_message in log_record.message
 
 
@@ -325,3 +325,16 @@ def teste_rooms_not_found(caplog):
     assert log_record.levelname == "ERROR"
     expected_message = "Erro na formatação da mensagem de log:'ip_address'"
     assert expected_message in log_record.message
+
+
+def test_tokens_never_reach_the_log_in_clear(caplog):
+    from SLL.py_log import mask_token
+
+    secret = "super-secret-token-value"
+    with caplog.at_level("INFO"):
+        AppLogger.log(Logmessage.SENDING_EMAIL, LogType.INFO, email="a@udf.edu.br", event="e1", token=secret)
+        AppLogger.log(Logmessage.EVENT_APPROVED_REJECTED_BY, LogType.INFO, event_id="e1", action="approved",
+                      who="coord", token=secret)
+    assert secret not in caplog.text
+    assert mask_token(secret) in caplog.text
+    assert mask_token(None) == "-" and mask_token("") == "-"
