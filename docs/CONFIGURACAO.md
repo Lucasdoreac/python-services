@@ -43,7 +43,5 @@ ou chave da Cloud Function: é melhor não subir do que aprovar evento sem avisa
 7. Depois de subir: `py_log.log` antigo (versões anteriores gravavam tokens em claro) deve ser apagado ou rotacionado.
 
 ## Problemas conhecidos
-- **`.env` vai para dentro da imagem.** O `Dockerfile` faz `COPY . .` e não há
-  `.dockerignore`: um `.env` local com segredos acaba na imagem construída.
 - **`src/SLL/sendblue.py` é código morto** (nenhum módulo o importa); por isso
   `APIKEYSECRET`, `SMTP*`, `EMAIL` e `REACT` não entram no `.env.example`.
