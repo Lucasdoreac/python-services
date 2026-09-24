@@ -15,6 +15,16 @@ def create_app(config_class):
     # Load MongoDB Factory
     MongoDBConnectionFactory.init_app(app.config['MONGO_URI'], app.config['MONGO_DATABASE'])
 
+    # Índice único de reserva ativa (sala, início): a única proteção atômica
+    # contra reserva dupla simultânea. Não derruba o boot se falhar (ex.: banco
+    # antigo já com duplicatas) — mas avisa alto, porque sem ele a proteção some.
+    from DAL import ReservationManager
+    try:
+        ReservationManager.ensure_indexes()
+    except Exception as exc:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).error("Índice único de reservas NÃO criado: %s", exc)
+
     from .auth_routes import auth_bp
     from .reservation_routes import reservation_bp
     from .events_routes import events_bp

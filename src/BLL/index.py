@@ -81,6 +81,8 @@ class FlowController:
 
         except KeyError as e:
             return jsonify({'error': f'Missing field: {str(e)}'}), 400
+        except ReservationConflict as e:
+            return jsonify({'error': str(e)}), 409
         except ValueError as e:
             return jsonify({'error': f'Invalid data format: {str(e)}'}), 400
 
@@ -353,7 +355,9 @@ class FlowController:
                 "$gte": start_at,
                 "$lt": start_at_limit
             },
-            "roomId": room_id
+            "roomId": room_id,
+            # Reserva rejeitada não ocupa a sala (mesmo critério do índice único).
+            "status": {"$in": ACTIVE_RESERVATION_STATUSES},
         }
         return reservations_repository.find_by_query(query) is not None
 

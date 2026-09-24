@@ -68,11 +68,16 @@ class LogType(Enum):
 class AppLogger:
 
     @staticmethod
-    def log(message: Logmessage, log_type: LogType, **kwargs):
+    def log(message: Logmessage | str, log_type: LogType, **kwargs):
         try:
             current_date = datetime.timestamp(datetime.now())
             timestamp = datetime.timestamp(datetime.now())
-            formatted_message = f'{current_date} - {timestamp} - {message.value.format(**kwargs)}'
+            # Aceita texto livre além do enum: dois chamadores já passam f-string
+            # (events_routes.put_event e send_emails), e o `.value` fazia o
+            # PRÓPRIO tratamento de erro estourar AttributeError — virando 500 e
+            # travando a tela de confirmação do evento.
+            text = message.value.format(**kwargs) if isinstance(message, Logmessage) else str(message)
+            formatted_message = f'{current_date} - {timestamp} - {text}'
         except KeyError as e:
             logging.error(f"Erro na formatação da mensagem de log:{e}")
             return

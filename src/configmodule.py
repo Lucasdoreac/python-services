@@ -17,8 +17,9 @@ class Config:
     SERVER_NAME = os.getenv("SERVER_NAME", "localhost:5000")
     SERVER_SCHEME = os.getenv("SERVER_SCHEME", "http")
 
-    # MongoDB URI setup
-    MONGO_URI = f"mongodb+srv://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}/"
+    # MongoDB URI setup. A full URI is useful for local development, where
+    # MongoDB normally runs as a Docker service instead of Atlas.
+    MONGO_URI = os.getenv("MONGO_URI") or f"mongodb+srv://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}/"
 
     SERVER_HOST = "0.0.0.0"
     SERVER_PORT = 5000

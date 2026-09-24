@@ -1,12 +1,48 @@
 from typing import Dict, Any
 from datetime import datetime, timedelta
 
+from pymongo.errors import DuplicateKeyError
+
 from SLL import AppLogger, LogType, Logmessage
 from .mongodb_factory import MongoDBConnectionFactory
 from utils.enums import EventStatus
 
 
+# Reserva que ainda ocupa a sala. Rejeitada não entra: sem isso, um evento
+# recusado pela Coordenação/Reitoria seguraria a sala para sempre.
+ACTIVE_RESERVATION_STATUSES = [
+    "requested",
+    EventStatus.DRAFT.value,
+    EventStatus.WAITING.value,
+    EventStatus.APPROVED_BY_COORDENACAO.value,
+    EventStatus.APPROVED_BY_REITORIA.value,
+    EventStatus.REQUESTED_CHANGE.value,
+    EventStatus.DIRECT_APPROVAL.value,
+]
+
+
+class ReservationConflict(ValueError):
+    """A sala já está reservada nesse horário (vira HTTP 409, não 400)."""
+
+
 class ReservationManager:
+
+    @staticmethod
+    def ensure_indexes():
+        """Índice único (sala, início) só para reservas ativas.
+
+        As duas checagens em código ("existe reserva?" e depois "insere") não são
+        atômicas: duas requisições simultâneas passavam juntas e a sala ficava
+        reservada duas vezes no mesmo horário (reproduzido localmente em
+        23/09/2026). Com o índice, o próprio Mongo recusa a segunda.
+        Idempotente; falha (ex.: duplicatas antigas no banco) sobe para quem chama.
+        """
+        MongoDBConnectionFactory.get_db().reservations.create_index(
+            [("roomId", 1), ("startAt", 1)],
+            name="uniq_active_reservation_room_start",
+            unique=True,
+            partialFilterExpression={"status": {"$in": ACTIVE_RESERVATION_STATUSES}},
+        )
 
     def __init__(self):
         self.db = MongoDBConnectionFactory.get_db()
@@ -41,10 +77,11 @@ class ReservationManager:
         conflict = self.reservation_collection.find_one({
             "roomId": room_id,
             "startAt": {"$lt": reservation_end_time},
-            "endAt": {"$gt": reservation_start_time}
+            "endAt": {"$gt": reservation_start_time},
+            "status": {"$in": ACTIVE_RESERVATION_STATUSES},
         })
         if conflict:
-            raise ValueError("This time slot is already booked.")
+            raise ReservationConflict("This time slot is already booked.")
 
         reservation = {
             "roomId": room_id,
@@ -54,7 +91,11 @@ class ReservationManager:
             "status": EventStatus.WAITING.value,
         }
 
-        self.reservation_collection.insert_one(reservation)
+        try:
+            self.reservation_collection.insert_one(reservation)
+        except DuplicateKeyError:
+            # Outra requisição reservou o mesmo horário entre a checagem e o insert.
+            raise ReservationConflict("This time slot is already booked.")
         return reservation
 
     def find_unavailable_room_ids_by_date(self, date_str: str, time_str: str):
