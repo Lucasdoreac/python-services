@@ -4,6 +4,7 @@ from .swagger_docs import get_swagger_specification
 from SLL.auth_decorators import token_required
 from BLL import AuthenticationController
 from SLL.py_log import AppLogger,LogType,Logmessage
+from settings import get_auth_settings
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -15,8 +16,16 @@ class AuthRoutes:
     def auth_mail():
         authentication_controller = AuthenticationController()
         email = request.args.get('email')
-        allowed_emails = ["danrley.pereira@cs.udf.edu.br"]
-        if not (email.endswith('@udf.edu.br') or email in allowed_emails):
+        if not email:
+            AppLogger.log(
+                Logmessage.MISSING_EMAIL,
+                LogType.INFO,
+                token=None,
+                ip_address=request.remote_addr,
+            )
+            return jsonify({'error': 'Email missing'}), 400
+
+        if not get_auth_settings().is_allowed(email):
             AppLogger.log(
                 Logmessage.INVALID_EMAIL_DOMAIN,
                 LogType.INFO,

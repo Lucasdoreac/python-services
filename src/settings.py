@@ -13,6 +13,8 @@ Variáveis:
     EMAIL_RECIPIENTS_REITORIA      e-mails separados por vírgula
     CLOUD_FUNCTION_URL             obrigatória quando EMAIL_DRY_RUN=false
     CLOUD_FUNCTION_API_KEY         obrigatória quando EMAIL_DRY_RUN=false
+    AUTH_ALLOWED_DOMAIN            domínio que pode pedir link de login (padrão udf.edu.br)
+    AUTH_ALLOWED_EMAILS            exceções individuais, separadas por vírgula
 """
 from functools import lru_cache
 from typing import Annotated
@@ -67,3 +69,36 @@ class EmailSettings(BaseSettings):
 @lru_cache
 def get_email_settings() -> EmailSettings:
     return EmailSettings()
+
+
+class AuthSettings(BaseSettings):
+    """Quem pode pedir link de login. Antes: domínio e uma exceção pessoal
+    fixos em SLL/auth_routes.py."""
+
+    model_config = SettingsConfigDict(extra="ignore")
+
+    auth_allowed_domain: str = "udf.edu.br"
+    auth_allowed_emails: Annotated[list[str], NoDecode] = []
+
+    @field_validator("auth_allowed_emails", mode="before")
+    @classmethod
+    def _split_csv(cls, value):
+        if isinstance(value, str):
+            return [item.strip().lower() for item in value.split(",") if item.strip()]
+        return value
+
+    @field_validator("auth_allowed_domain", mode="before")
+    @classmethod
+    def _normalize_domain(cls, value):
+        return value.strip().lower().lstrip("@") if isinstance(value, str) else value
+
+    def is_allowed(self, email: str | None) -> bool:
+        email = (email or "").strip().lower()
+        if email.count("@") != 1:
+            return False
+        return email.endswith("@" + self.auth_allowed_domain) or email in self.auth_allowed_emails
+
+
+@lru_cache
+def get_auth_settings() -> AuthSettings:
+    return AuthSettings()
