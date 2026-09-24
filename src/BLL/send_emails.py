@@ -52,7 +52,11 @@ def send_to_coordenacao(event_id):
     course_id = FlowController.find_event_by_event_id(event_id)
     coordinator_id = get_coordinator_by_graduation_id(course_id['graduationId'])
     teacher_email = find_teacher_email_by_id(coordinator_id)
-    emails["coordenacao"].append(teacher_email)
+    # Lista local por chamada: emails["coordenacao"] é global e compartilhada
+    # entre todas as requisições. Um .append() nela (como havia antes)
+    # acumulava o coordenador de cada evento anterior para sempre, vazando
+    # destinatário de um evento para o email de outro.
+    coordenacao_recipients = emails["coordenacao"] + [teacher_email]
 
     # Render the template with the appropriate data
     html_content = render_template(
@@ -75,7 +79,7 @@ def send_to_coordenacao(event_id):
     payload = {
         'subject': 'Evento para Aprovação - Coordenação',
         'content': html_content,
-        'to': ", ".join(emails["coordenacao"]),
+        'to': ", ".join(coordenacao_recipients),
         'is_html': True
     }
     headers = {
@@ -83,7 +87,7 @@ def send_to_coordenacao(event_id):
         'Content-Type': 'application/json'
     }
 
-    AppLogger.log(Logmessage.SENDING_EMAIL, LogType.INFO, email=emails["coordenacao"], event=event_id, token=tokenId)
+    AppLogger.log(Logmessage.SENDING_EMAIL, LogType.INFO, email=coordenacao_recipients, event=event_id, token=tokenId)
     # Send the request to your cloud function
     return requests.post(url, json=payload, headers=headers)
 
