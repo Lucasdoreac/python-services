@@ -16,6 +16,9 @@ class Config:
     MONGO_USERNAME = os.getenv("MONGO_USERNAME")
     SERVER_NAME = os.getenv("SERVER_NAME", "localhost:5000")
     SERVER_SCHEME = os.getenv("SERVER_SCHEME", "http")
+    # É o que o Flask usa nos links _external (aprovar/rejeitar nos e-mails).
+    # Antes SERVER_SCHEME não tinha efeito e a produção fixava "http".
+    PREFERRED_URL_SCHEME = SERVER_SCHEME
 
     # MongoDB URI setup. A full URI is useful for local development, where
     # MongoDB normally runs as a Docker service instead of Atlas.
@@ -31,7 +34,6 @@ class DevelopmentConfig(Config):
 
 class ProductionConfig(Config):
     SESSION_COOKIE_SECURE = True
-    PREFERRED_URL_SCHEME = "http"
     SERVER_HOST = "0.0.0.0"
     SERVER_PORT = 8000
 

@@ -19,7 +19,7 @@ produção · — opcional.
 | `URL_graph` | ✅ | `https://catalogo.exemplo/graphql/` | Catálogo (GraphQL): tipos, cursos e ofertas (bloqueio de sala). | Busca de salas livres responde 500. |
 | `URL_restapi` | ✅ | `https://catalogo.exemplo/restapi` | Catálogo (REST): salas, campus e cursos. | Listas vazias ou erro. |
 | `SERVER_NAME` | ⚠️ | `reservas-api.exemplo` | Host público da API, usado nos links de aprovar/rejeitar dos e-mails. | Os links saem para `localhost:5000` e não abrem fora do servidor. |
-| `SERVER_SCHEME` | — | `https` | **Hoje não tem efeito**: ver "Problemas conhecidos". | — |
+| `SERVER_SCHEME` | ⚠️ | `https` | Esquema dos links de aprovar/rejeitar nos e-mails (`PREFERRED_URL_SCHEME` do Flask). Atrás de HTTPS: `https`. | Vale `http`: links `http://`. |
 | `MINIO_URL` | ✅ | `https://arquivos.exemplo:9000` | Endereço **público, com esquema**, do MinIO: links do PDF e ícones nos e-mails, caminho gravado do PDF. | Links quebrados (`None/labtech/...`). |
 | `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` | ✅ | — | Credenciais para subir o PDF do evento. | O PDF não sobe (erro só no stdout, via `print`). |
 | `EMAIL_DRY_RUN` | ⚠️ | `false` | `true` (padrão) não envia nada: as rotas devolvem o HTML. Produção: `false`. | Nenhum e-mail sai. |
@@ -36,16 +36,13 @@ ou chave da Cloud Function: é melhor não subir do que aprovar evento sem avisa
 ## Checklist de produção
 1. Mongo: `MONGO_URI` (ou o trio) + `MONGO_DATABASE`.
 2. Serviços: `URL_AUTH`, `URL_graph`, `URL_restapi` apontando para o auth_service e o internal_apis de produção.
-3. Links: `SERVER_NAME` = host público da API; `MINIO_URL` = endereço público do MinIO com `https://`.
+3. Links: `SERVER_NAME` = host público da API e `SERVER_SCHEME=https`; `MINIO_URL` = endereço público do MinIO com `https://`.
 4. E-mail: `EMAIL_DRY_RUN=false` + destinatários + Cloud Function.
 5. Login: conferir `AUTH_ALLOWED_DOMAIN` e, se houver, `AUTH_ALLOWED_EMAILS`.
 6. Aulas: `OFFER_PERIOD_HOURS` com os horários reais dos períodos.
 7. Depois de subir: `py_log.log` antigo (versões anteriores gravavam tokens em claro) deve ser apagado ou rotacionado.
 
 ## Problemas conhecidos
-- **`SERVER_SCHEME` não faz nada.** O Flask usa `PREFERRED_URL_SCHEME`, que a
-  `ProductionConfig` fixa em `"http"` (`src/configmodule.py`): atrás de HTTPS, os links
-  de aprovação dos e-mails saem com `http://`.
 - **`.env` vai para dentro da imagem.** O `Dockerfile` faz `COPY . .` e não há
   `.dockerignore`: um `.env` local com segredos acaba na imagem construída.
 - **`src/SLL/sendblue.py` é código morto** (nenhum módulo o importa); por isso
