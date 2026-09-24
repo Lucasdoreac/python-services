@@ -123,6 +123,26 @@ class GraphQlRequestMethods:
         return rooms
 
     @staticmethod
+    def get_offers_by_weekday_request(weekday: int, year: int, semester: int):
+        """
+        Ofertas (aulas do semestre) com aula nesse dia da semana (ISO: 1 = segunda).
+        Levanta exceção se o catálogo falhar: sem as ofertas não dá para
+        afirmar que uma sala está livre.
+        """
+        query = f"""query{{
+                    offers(searchWeekday: {int(weekday)}, searchYear: {int(year)}, searchSemester: {int(semester)}) {{
+                        room {{ id }}
+                        period {{ name }}
+                    }}
+                    }}"""
+
+        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})
+        data = response.json()
+        if response.status_code != 200 or "errors" in data:
+            raise Exception(f"Erro ao buscar ofertas no shared-resources: {data.get('errors')}")
+        return data.get("offers") or []
+
+    @staticmethod
     def get_all_campus_request():
 
         query = """

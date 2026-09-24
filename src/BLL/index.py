@@ -5,7 +5,8 @@ from flask import jsonify
 from datetime import datetime, timedelta
 from DAL import *
 from DAL.collections_repositories import EventsRepository
-from SLL.cluster_api.request_methods import RestApiRequestMethods
+from SLL.cluster_api.request_methods import RestApiRequestMethods, GraphQlRequestMethods
+from settings import get_offer_settings
 from utils.enums import EventStatus
 
 # Initialize repository instances
@@ -106,6 +107,36 @@ class FlowController:
         except Exception as e:
             return jsonify({'error': f"An error ocucred: {str(e)}"}), 400
 
+    @staticmethod
+    def find_room_ids_busy_with_classes(date_str: str, time_str: str) -> set:
+        """
+        Salas com aula (oferta do semestre) no dia da semana e período que
+        cruzam a janela de busca. A janela é a mesma das reservas avulsas
+        (find_unavailable_room_ids_by_date): 3 h a partir do horário.
+        Semestre: 1 = janeiro a junho, 2 = julho a dezembro (mesma regra do
+        POST /offers do internal_apis).
+        """
+        search_start = datetime.combine(datetime.strptime(date_str, "%Y-%m-%d"),
+                                        datetime.strptime(time_str, "%H:%M:%S").time())
+        search_end = search_start + timedelta(hours=3)
+        day = search_start.date()
+
+        offers = GraphQlRequestMethods.get_offers_by_weekday_request(
+            weekday=day.isoweekday(), year=day.year, semester=1 if day.month < 7 else 2,
+        )
+
+        settings = get_offer_settings()
+        busy = set()
+        for offer in offers:
+            hours = settings.hours_for((offer.get("period") or {}).get("name"))
+            room_id = (offer.get("room") or {}).get("id")
+            if hours is None or room_id is None:
+                continue
+            class_start, class_end = (datetime.combine(day, hour) for hour in hours)
+            if class_start < search_end and class_end > search_start:
+                busy.add(room_id)
+        return busy
+
     def filter_available_rooms(self, date_str: str, time_str: str, page: int, page_size: int, room_name: str = ""):
         """
         Recebe uma data, um horário e opcionalmente um nome de sala, e retorna uma lista de salas disponíveis,
@@ -114,7 +145,9 @@ class FlowController:
         """
         # Obter os 'IDs' das salas indisponíveis para o horário informado
         reservation_system = ReservationManager()
-        unavailable_room_ids = reservation_system.find_unavailable_room_ids_by_date(date_str, time_str)
+        unavailable_room_ids = set(reservation_system.find_unavailable_room_ids_by_date(date_str, time_str))
+        # Aulas do semestre também ocupam a sala (python-services #29).
+        unavailable_room_ids |= FlowController.find_room_ids_busy_with_classes(date_str, time_str)
 
         # Buscar todas as salas cadastradas no shared-resources, paginadas e filtradas por nome se fornecido
         all_rooms, pagination_config = self.find_all_rooms(page, page_size, room_name)

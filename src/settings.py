@@ -15,7 +15,9 @@ Variáveis:
     CLOUD_FUNCTION_API_KEY         obrigatória quando EMAIL_DRY_RUN=false
     AUTH_ALLOWED_DOMAIN            domínio que pode pedir link de login (padrão udf.edu.br)
     AUTH_ALLOWED_EMAILS            exceções individuais, separadas por vírgula
+    OFFER_PERIOD_HOURS             horário de cada período de aula, "manhã=07:00-12:00,..."
 """
+from datetime import time
 from functools import lru_cache
 from typing import Annotated
 
@@ -102,3 +104,45 @@ class AuthSettings(BaseSettings):
 @lru_cache
 def get_auth_settings() -> AuthSettings:
     return AuthSettings()
+
+
+DEFAULT_OFFER_PERIOD_HOURS = "manhã=07:00-12:00,tarde=13:00-18:00,noite=19:00-23:00"
+
+
+class OfferSettings(BaseSettings):
+    """Horário que cada período de oferta (aula do semestre) ocupa a sala.
+
+    A oferta só traz o nome do período (MANHÃ/TARDE/NOITE na planilha da UDF).
+    Os horários padrão são provisórios, até virem do calendário acadêmico.
+
+    Variável:
+        OFFER_PERIOD_HOURS  "periodo=HH:MM-HH:MM,..." (padrão: DEFAULT_OFFER_PERIOD_HOURS)
+    """
+
+    model_config = SettingsConfigDict(extra="ignore", validate_default=True)
+
+    offer_period_hours: Annotated[dict[str, tuple[time, time]], NoDecode] = DEFAULT_OFFER_PERIOD_HOURS
+
+    @field_validator("offer_period_hours", mode="before")
+    @classmethod
+    def _parse(cls, value):
+        if not isinstance(value, str):
+            return value
+        hours = {}
+        for item in filter(None, (part.strip() for part in value.split(","))):
+            name, _, span = item.partition("=")
+            start, _, end = span.partition("-")
+            start, end = time.fromisoformat(start.strip()), time.fromisoformat(end.strip())
+            if not start < end:
+                raise ValueError(f"OFFER_PERIOD_HOURS: início deve ser antes do fim em '{item}'")
+            hours[name.strip().casefold()] = (start, end)
+        return hours
+
+    def hours_for(self, period_name: str | None) -> tuple[time, time] | None:
+        """None = período desconhecido (ex.: "não se aplica"): não bloqueia sala."""
+        return self.offer_period_hours.get((period_name or "").strip().casefold())
+
+
+@lru_cache
+def get_offer_settings() -> OfferSettings:
+    return OfferSettings()
