@@ -290,9 +290,10 @@ def generate_event_pdf(event_id,data: Dict[str, Any] = None):
 
 
 def save_pdf(event_id):
-    MINIO_URL = f"{os.getenv('MINIO_URL')}"
-    if '//' in MINIO_URL:
-        MINIO_URL = MINIO_URL.split('//', 1)[1]
+    # MINIO_URL com esquema (http://host:porta) é o endereço público do PDF,
+    # o mesmo que os e-mails usam; o client do MinIO quer só host:porta.
+    public_url = f"{os.getenv('MINIO_URL')}".rstrip('/')
+    MINIO_URL = public_url.split('//', 1)[1] if '//' in public_url else public_url
     ACCESS_KEY = f"{os.getenv('MINIO_ACCESS_KEY')}"
     SECRET_KEY = f"{os.getenv('MINIO_SECRET_KEY')}"
 
@@ -324,7 +325,7 @@ def save_pdf(event_id):
         )
 
         pdf_data ={
-            "path":f"dwcorp.com.br:9000/{bucket_name}/{object_name}",
+            "path": f"{public_url}/{bucket_name}/{object_name}",
             "eventId": event_id,
         }
 
