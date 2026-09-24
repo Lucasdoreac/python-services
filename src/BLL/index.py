@@ -5,7 +5,7 @@ from flask import jsonify
 from datetime import datetime, timedelta
 from DAL import *
 from DAL.collections_repositories import EventsRepository
-from SLL.cluster_api.request_methods import RestApiRequestMethods, GraphQlRequestMethods
+from SLL.cluster_api.request_methods import RestApiRequestMethods, GraphQlRequestMethods, catalog_headers
 from settings import get_offer_settings
 from utils.enums import EventStatus
 
@@ -251,7 +251,7 @@ class FlowController:
             url_base = os.getenv('URL_restapi')
             url = f"{url_base}/types/?collection_name={collection}"
 
-            response = requests.get(url)
+            response = requests.get(url, headers=catalog_headers())
             response.raise_for_status()
             data = response.json()
             types = [types_item for item in data for types_item in item.get('types', [])]
