@@ -1,4 +1,5 @@
 import os
+import tempfile
 from datetime import datetime
 from typing import Dict, Any
 import typst
@@ -270,26 +271,22 @@ def generate_event_pdf(event_id,data: Dict[str, Any] = None):
 )
     """
 
-    pdf_dir = os.path.join("PDFs")
-    os.makedirs(pdf_dir, exist_ok=True)
+    # Diretório temporário por evento: antes todos escreviam em PDFs/evento.pdf
+    # (versionado), o que sujava o git e deixava duas aprovações simultâneas
+    # subirem o PDF de um evento com o nome do outro.
+    with tempfile.TemporaryDirectory(prefix=f"pdf-{event_id}-") as pdf_dir:
+        typst_file_path = os.path.join(pdf_dir, "evento.typ")
+        with open(typst_file_path, "w", encoding="utf-8") as typ_file:
+            typ_file.write(typst_text)
 
-    typst_file_path = os.path.join(pdf_dir, "evento.typ")
-    with open(typst_file_path, "w", encoding="utf-8") as typ_file:
-        typ_file.write(typst_text)
-    print(f"Arquivo Typst criado em: {typst_file_path}")
+        pdf_path = os.path.join(pdf_dir, "evento.pdf")
+        with open(pdf_path, "wb") as pdf_file:
+            pdf_file.write(typst.compile(typst_file_path))
 
-    pdf_bytes = typst.compile(typst_file_path)
-
-    pdf_path = os.path.join(pdf_dir, "evento.pdf")
-    with open(pdf_path, "wb") as pdf_file:
-        pdf_file.write(pdf_bytes)
-
-    print(f"PDF gerado e salvo com sucesso em: {pdf_path}")
-
-    save_pdf(event_id)
+        save_pdf(event_id, pdf_path)
 
 
-def save_pdf(event_id):
+def save_pdf(event_id, local_pdf_path):
     # MINIO_URL com esquema (http://host:porta) é o endereço público do PDF,
     # o mesmo que os e-mails usam; o client do MinIO quer só host:porta.
     public_url = f"{os.getenv('MINIO_URL')}".rstrip('/')
@@ -312,8 +309,6 @@ def save_pdf(event_id):
         if not client.bucket_exists(bucket_name):
             client.make_bucket(bucket_name)
 
-        # PDF file to upload
-        local_pdf_path = "PDFs/evento.pdf"
         object_name = f"reservation-pdfs/{event_id}.pdf"  # Object key in bucket
 
         # Upload the file
