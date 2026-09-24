@@ -117,7 +117,18 @@ class ResourcesRoutes:
         try:
 
             course_name = request.args.get('course_name')
+            course_id = request.args.get('course_id')
             url = f"{os.getenv('URL_restapi')}/courses/"
+
+            if course_id:
+                # Um curso só. Antes course_id era ignorado e a rota devolvia
+                # o catálogo inteiro, o que apagava o "Curso Vinculado" ao
+                # editar um rascunho (issue #37 do frontend).
+                response = requests.get(url, params={'course_id': course_id})
+                if response.status_code == 404:
+                    return jsonify({'error': "Course not found"}), 404
+                response.raise_for_status()
+                return jsonify({'course': response.json()}), 200
 
             if course_name:
                 url += f"?course_name={course_name}"
