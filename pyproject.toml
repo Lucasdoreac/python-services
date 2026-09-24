@@ -34,6 +34,7 @@ gunicorn = "^23.0.0"
 # sem pinar versão nem refletir no lockfile. Descoberto ao escrever o
 # Dockerfile (poetry install --no-root não instala nada não declarado).
 sib-api-v3-sdk = "*"
+pydantic-settings = "^2.7"
 
 
 [build-system]

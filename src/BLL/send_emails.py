@@ -9,19 +9,35 @@ from SLL import AppLogger, Logmessage, LogType
 from SLL.cluster_api.request_methods import GraphQlRequestMethods
 from .index import events_repository, FlowController
 from utils.enums import EmailStep, EventStatus
+from settings import get_email_settings
 
 
-if os.getenv("FLASK_ENV") == "development":
-    emails = {
-        "reitoria": ["danrleywillian@gmail.com", "guilherme.amaral2004@gmail.com"],
-        "coordenacao": ["dwcorpbrasil@gmail.com", "danrley.pereira@cs.udf.edu.br"]
-    }
-else:
-    emails = {
-        "reitoria": ["suelaine.santos@udf.edu.br"],
-        "coordenacao": [],
-        "reservas": ["bruno.silva@udf.edu.br"]
-    }
+
+
+def _deliver(subject, html_content, to, event_id, token="-"):
+    """Único ponto que decide se o e-mail sai.
+
+    EMAIL_DRY_RUN (padrão: ligado) devolve o HTML sem enviar nada -- é o que
+    o preview das rotas de aprovação usa. Desligado, faz o POST na cloud
+    function. Antes cada função de envio repetia `if FLASK_ENV ==
+    "development": return html_content` e montava seu próprio POST.
+    """
+    settings = get_email_settings()
+    if settings.email_dry_run:
+        AppLogger.log(
+            f"EMAIL_DRY_RUN ligado: '{subject}' (evento {event_id}) não enviado; "
+            f"destinatários: {to}",
+            LogType.INFO,
+        )
+        return html_content
+
+    AppLogger.log(Logmessage.SENDING_EMAIL, LogType.INFO, email=to, event=event_id, token=token)
+    return requests.post(
+        f"{settings.cloud_function_url}/send-email",
+        json={'subject': subject, 'content': html_content, 'to': to, 'is_html': True},
+        headers={'X-API-Key': settings.cloud_function_api_key, 'Content-Type': 'application/json'},
+    )
+
 
 def send_to_coordenacao(event_id):
     """
@@ -52,7 +68,7 @@ def send_to_coordenacao(event_id):
     course_id = FlowController.find_event_by_event_id(event_id)
     coordinator_id = get_coordinator_by_graduation_id(course_id.get('graduationId'))
     teacher_email = find_teacher_email_by_id(coordinator_id)
-    # Lista local por chamada: emails["coordenacao"] é global e compartilhada
+    # Lista local por chamada: antes, emails["coordenacao"] era global e compartilhada
     # entre todas as requisições. Um .append() nela (como havia antes)
     # acumulava o coordenador de cada evento anterior para sempre, vazando
     # destinatário de um evento para o email de outro.
@@ -61,16 +77,16 @@ def send_to_coordenacao(event_id):
     # correspondente, não deve derrubar o fluxo com 500 (era o que acontecia
     # antes, via IndexError/KeyError em get_coordinator_by_graduation_id e
     # find_teacher_email_by_id). Cai para a caixa padrão de Coordenação
-    # (emails["coordenacao"]) e segue o envio normalmente.
+    # (EMAIL_RECIPIENTS_COORDENACAO) e segue o envio normalmente.
     if teacher_email:
-        coordenacao_recipients = emails["coordenacao"] + [teacher_email]
+        coordenacao_recipients = get_email_settings().email_recipients_coordenacao + [teacher_email]
     else:
         AppLogger.log(
             f"Evento {event_id}: sem coordenador identificável (curso {course_id.get('graduationId')}); "
             "usando caixa padrão de Coordenação.",
             LogType.WARNING,
         )
-        coordenacao_recipients = list(emails["coordenacao"])
+        coordenacao_recipients = list(get_email_settings().email_recipients_coordenacao)
 
     # Render the template with the appropriate data
     html_content = render_template(
@@ -85,25 +101,10 @@ def send_to_coordenacao(event_id):
         approve_link=approve_link,
         reject_link=reject_link
     )
-    if os.getenv("FLASK_ENV") == "development":
-        return html_content
-
-    # Prepare the email payload
-    url = f"{os.getenv('CLOUD_FUNCTION_URL')}/send-email"
-    payload = {
-        'subject': 'Evento para Aprovação - Coordenação',
-        'content': html_content,
-        'to': ", ".join(coordenacao_recipients),
-        'is_html': True
-    }
-    headers = {
-        'X-API-Key': os.getenv('CLOUD_FUNCTION_API_KEY'),
-        'Content-Type': 'application/json'
-    }
-
-    AppLogger.log(Logmessage.SENDING_EMAIL, LogType.INFO, email=coordenacao_recipients, event=event_id, token=tokenId)
-    # Send the request to your cloud function
-    return requests.post(url, json=payload, headers=headers)
+    return _deliver(
+        'Evento para Aprovação - Coordenação', html_content,
+        ", ".join(coordenacao_recipients), event_id, tokenId,
+    )
 
 def send_to_reitoria(event_id):
     """
@@ -145,26 +146,10 @@ def send_to_reitoria(event_id):
         approve_link=approve_link,
         reject_link=reject_link
     )
-    if os.getenv("FLASK_ENV") == "development":
-        return html_content
-
-    # Prepare the email payload
-    url = f"{os.getenv('CLOUD_FUNCTION_URL')}/send-email"
-    payload = {
-        'subject': 'Evento para Aprovação - Reitoria',
-        'content': html_content,
-        'to': ", ".join(emails["reitoria"]),
-        'is_html': True
-    }
-    headers = {
-        'X-API-Key': os.getenv('CLOUD_FUNCTION_API_KEY'),
-        'Content-Type': 'application/json'
-    }
-
-    AppLogger.log(Logmessage.SENDING_EMAIL, LogType.INFO, email=emails["reitoria"], event=event_id, token=tokenId)
-    # Send the request to your cloud function
-    response = requests.post(url, json=payload, headers=headers)
-    return response
+    return _deliver(
+        'Evento para Aprovação - Reitoria', html_content,
+        ", ".join(get_email_settings().email_recipients_reitoria), event_id, tokenId,
+    )
 
 
 def send_reservation_info_to_reitoria(event_id, reservation_date=None, classification=None):
@@ -237,32 +222,11 @@ def send_reservation_info_to_reitoria(event_id, reservation_date=None, classific
         reservation_date=formatted_reservation_date,
     )
 
-    # 8. Return HTML content if in development mode
-    if os.getenv("FLASK_ENV") == "development":
-        return html_content
-
-    # 9. Prepare and send email
-    url = f"{os.getenv('CLOUD_FUNCTION_URL')}/send-email"
-    payload = {
-        'subject': 'Nova Reserva Criada',
-        'content': html_content,
-        'to': ", ".join(emails["reitoria"]),
-        'is_html': True
-    }
-    headers = {
-        'X-API-Key': os.getenv('CLOUD_FUNCTION_API_KEY'),
-        'Content-Type': 'application/json'
-    }
-
-    AppLogger.log(
-        Logmessage.SENDING_EMAIL,
-        LogType.INFO,
-        email=emails["reitoria"],
-        event=event_id,
-        message="Notification of new reservation"
+    # 8. Envia (ou devolve o HTML em dry-run)
+    return _deliver(
+        'Nova Reserva Criada', html_content,
+        ", ".join(get_email_settings().email_recipients_reitoria), event_id,
     )
-
-    return requests.post(url, json=payload, headers=headers)
 
 def send_event_status(event_id, is_approved: bool, who: str, token:str):
     """
@@ -323,28 +287,9 @@ def send_event_status(event_id, is_approved: bool, who: str, token:str):
         denied_icon_url=denied_icon_url,
         who="Reitoria" if who == "reitoria" else "Coordenação",
     )
-    if os.getenv("FLASK_ENV") == "development":
-        return html_content
-
     # Subject line changes based on approval or denial
     subject = "Evento Aprovado" if is_approved else "Evento Não Aprovado"
-
-    # Prepare the email payload
-    url = f"{os.getenv('CLOUD_FUNCTION_URL')}/send-email"
-    payload = {
-        'subject': subject,
-        'content': html_content,
-        'to': [email],
-        'is_html': True
-    }
-    headers = {
-        'X-API-Key': os.getenv('CLOUD_FUNCTION_API_KEY'),
-        'Content-Type': 'application/json'
-    }
-
-    # Send the request to your cloud function
-    response = requests.post(url, json=payload, headers=headers)
-    return response
+    return _deliver(subject, html_content, [email], event_id, token)
 
 # Enquanto o token está active, qual status o evento precisa ter pra essa
 # etapa ainda estar de fato pendente. Se o evento já saiu desse status (foi

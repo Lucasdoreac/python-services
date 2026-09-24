@@ -11,6 +11,10 @@ def create_app(config_class):
     app.config.from_object(config_class)
     CORS(app)
 
+    # Falha rápido na subida se EMAIL_DRY_RUN=false sem destinatários/URL/chave.
+    from settings import get_email_settings
+    get_email_settings()
+
     from DAL import MongoDBConnectionFactory
     # Load MongoDB Factory
     MongoDBConnectionFactory.init_app(app.config['MONGO_URI'], app.config['MONGO_DATABASE'])

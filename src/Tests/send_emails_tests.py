@@ -20,6 +20,27 @@ def app(monkeypatch):
         yield app
 
 
+COORDENACAO_BASE = ["base-coord@udf.edu.br"]
+REITORIA_BASE = ["reitoria@udf.edu.br"]
+
+
+def enable_real_sending(monkeypatch):
+    """Liga o envio real (EMAIL_DRY_RUN=false) com destinatários de teste.
+
+    Substitui o antigo `setenv("FLASK_ENV", "production")`: quem decide se
+    e-mail sai agora é EMAIL_DRY_RUN, não o modo do Flask.
+    """
+    from settings import get_email_settings
+
+    monkeypatch.setenv("EMAIL_DRY_RUN", "false")
+    monkeypatch.setenv("EMAIL_RECIPIENTS_COORDENACAO", ",".join(COORDENACAO_BASE))
+    monkeypatch.setenv("EMAIL_RECIPIENTS_REITORIA", ",".join(REITORIA_BASE))
+    monkeypatch.setenv("CLOUD_FUNCTION_URL", "https://fn.example")
+    monkeypatch.setenv("CLOUD_FUNCTION_API_KEY", "chave")
+    get_email_settings.cache_clear()
+    return get_email_settings()
+
+
 class TestSendToCoordenacaoRecipients:
 
     def test_does_not_leak_coordinator_between_calls(self, monkeypatch, app):
@@ -56,9 +77,9 @@ class TestSendToCoordenacaoRecipients:
             return FakeResponse()
 
         monkeypatch.setattr(send_emails.requests, "post", fake_post)
-        # Força o caminho de produção: em FLASK_ENV=development a função
-        # retorna o HTML antes de montar/enviar o payload (send_emails.py:70-71).
-        monkeypatch.setenv("FLASK_ENV", "production")
+        # Força o envio real: com EMAIL_DRY_RUN ligado (padrão) a função
+        # devolve o HTML antes de montar/enviar o payload.
+        enable_real_sending(monkeypatch)
 
         send_emails.send_to_coordenacao("event-1")
         send_emails.send_to_coordenacao("event-2")
@@ -140,7 +161,7 @@ class TestSendToCoordenacaoWithoutCoordinator:
             return FakeResponse()
 
         monkeypatch.setattr(send_emails.requests, "post", fake_post)
-        monkeypatch.setenv("FLASK_ENV", "production")
+        enable_real_sending(monkeypatch)
         return captured_payloads
 
     def test_falls_back_to_default_mailbox_when_course_has_no_coordinator(self, monkeypatch, app):
@@ -162,7 +183,7 @@ class TestSendToCoordenacaoWithoutCoordinator:
         send_emails.send_to_coordenacao("event-sem-coordenador")
 
         assert len(captured_payloads) == 1
-        assert captured_payloads[0]["to"] == ", ".join(send_emails.emails["coordenacao"])
+        assert captured_payloads[0]["to"] == ", ".join(COORDENACAO_BASE)
 
     def test_falls_back_when_event_has_no_graduation_id(self, monkeypatch, app):
         from BLL import send_emails
@@ -177,7 +198,7 @@ class TestSendToCoordenacaoWithoutCoordinator:
         send_emails.send_to_coordenacao("event-sem-graduationId")
 
         assert len(captured_payloads) == 1
-        assert captured_payloads[0]["to"] == ", ".join(send_emails.emails["coordenacao"])
+        assert captured_payloads[0]["to"] == ", ".join(COORDENACAO_BASE)
 
 
 class TestApprovalTokenSingleUse:
@@ -277,3 +298,84 @@ class TestApprovalTokenSingleUse:
 
         assert send_emails.verify_token_from_email(other_event_token) is True
         assert send_emails.verify_token_from_email(other_step_token) is True
+
+
+class TestEmailDryRun:
+    """EMAIL_DRY_RUN é o único interruptor de envio (antes: um
+    `FLASK_ENV == "development"` repetido em cada função de envio)."""
+
+    def _forbid_post(self, monkeypatch, send_emails):
+        def fail(*args, **kwargs):
+            raise AssertionError("requests.post não deveria ser chamado em dry-run")
+
+        monkeypatch.setattr(send_emails.requests, "post", fail)
+
+    def _stub_event_lookups(self, monkeypatch, send_emails):
+        monkeypatch.setattr(
+            send_emails.FlowController,
+            "find_event_by_event_id",
+            staticmethod(lambda event_id: {"graduationId": "curso"}),
+        )
+        monkeypatch.setattr(send_emails, "get_coordinator_by_graduation_id", lambda g: None)
+
+    def test_coordenacao_default_does_not_send_and_returns_html(self, monkeypatch, app):
+        from BLL import send_emails
+        from settings import get_email_settings
+
+        # Mesmo com FLASK_ENV=production: o interruptor é EMAIL_DRY_RUN.
+        monkeypatch.setenv("FLASK_ENV", "production")
+        monkeypatch.delenv("EMAIL_DRY_RUN", raising=False)
+        get_email_settings.cache_clear()
+        self._forbid_post(monkeypatch, send_emails)
+        self._stub_event_lookups(monkeypatch, send_emails)
+
+        result = send_emails.send_to_coordenacao("event-1")
+
+        assert isinstance(result, str) and "<html" in result.lower()
+
+    def test_reitoria_default_does_not_send_and_returns_html(self, monkeypatch, app):
+        from BLL import send_emails
+        from settings import get_email_settings
+
+        monkeypatch.setenv("FLASK_ENV", "production")
+        monkeypatch.delenv("EMAIL_DRY_RUN", raising=False)
+        get_email_settings.cache_clear()
+        self._forbid_post(monkeypatch, send_emails)
+
+        result = send_emails.send_to_reitoria("event-1")
+
+        assert isinstance(result, str) and "<html" in result.lower()
+
+    def test_reitoria_real_sending_uses_configured_recipients(self, monkeypatch, app):
+        from BLL import send_emails
+
+        captured = []
+
+        class FakeResponse:
+            status_code = 200
+
+        monkeypatch.setattr(
+            send_emails.requests,
+            "post",
+            lambda url, json=None, headers=None: captured.append((url, json, headers)) or FakeResponse(),
+        )
+        enable_real_sending(monkeypatch)
+
+        send_emails.send_to_reitoria("event-1")
+
+        (url, payload, headers), = captured
+        assert url == "https://fn.example/send-email"
+        assert payload["to"] == ", ".join(REITORIA_BASE)
+        assert headers["X-API-Key"] == "chave"
+
+    def test_no_hardcoded_personal_recipients_left_in_code(self):
+        """PRIV-01: endereços pessoais de devs ficavam fixos em send_emails.py."""
+        import pathlib
+
+        source = pathlib.Path(__file__).resolve().parents[1] / "BLL" / "send_emails.py"
+        text = source.read_text()
+
+        for personal in ("danrleywillian@gmail.com", "guilherme.amaral2004@gmail.com",
+                         "dwcorpbrasil@gmail.com", "danrley.pereira@cs.udf.edu.br",
+                         "udf.edu.br"):
+            assert personal not in text

@@ -3,6 +3,7 @@ from flask import Blueprint, request, jsonify
 from BLL import send_to_reitoria, send_to_coordenacao, send_event_status, send_reservation_info_to_reitoria
 from BLL.send_emails import verify_token_from_email, apply_token_action
 from functools import wraps
+from settings import get_email_settings
 
 # Create a blueprint for handling templates and related routes.
 templates_bp = Blueprint('templates_bp', __name__, template_folder='../templates')
@@ -37,10 +38,10 @@ def administration_approval():
         return "Not found", 404
     step = int(step)
     if step == 0:
-        if os.getenv("FLASK_ENV") == "development":
+        if get_email_settings().email_dry_run:
             return send_to_coordenacao(eventId)
     elif step == 1:
-        if os.getenv("FLASK_ENV") == "development":
+        if get_email_settings().email_dry_run:
             return send_to_reitoria(eventId)
 
 
@@ -53,7 +54,7 @@ def approve():
 
     send_event_status(eventId, True, who, token)
     if who == "coordenacao":
-        if os.getenv("FLASK_ENV") == "development":
+        if get_email_settings().email_dry_run:
             return send_to_reitoria(eventId)
         send_to_reitoria(eventId)
     return "Evento aprovado!"
@@ -66,7 +67,7 @@ def reject():
     who = request.args.get('who')
     token = request.args.get('tokenId')
 
-    if os.getenv("FLASK_ENV") == "development":
+    if get_email_settings().email_dry_run:
         return send_event_status(eventId, False, who, token)
     send_event_status(eventId, False, who, token)
     return "Evento rejeitado!"
@@ -102,8 +103,8 @@ def notify_reservation():
         return jsonify({'error': 'eventId é obrigatório'}), 400
 
     try:
-        if os.getenv("FLASK_ENV") == "development":
-            # No ambiente de desenvolvimento, retorna o conteúdo HTML
+        if get_email_settings().email_dry_run:
+            # Em dry-run (EMAIL_DRY_RUN), retorna o conteúdo HTML
             html_content = send_reservation_info_to_reitoria(event_id)
             return html_content
         else:
