@@ -1,4 +1,3 @@
-import mongomock
 import pytest
 
 
@@ -28,9 +27,7 @@ class FakeReservationManager:
 @pytest.fixture
 def pdf(monkeypatch):
     # BLL cria repositórios na importação e eles pedem o Mongo.
-    from DAL import MongoDBConnectionFactory
-    monkeypatch.setattr(MongoDBConnectionFactory, "_client", mongomock.MongoClient())
-    monkeypatch.setattr(MongoDBConnectionFactory, "_database", "test-pdf")
+    # Mongo em memória: conftest.py (mongo_in_memory).
     from BLL import pdf
     return pdf
 

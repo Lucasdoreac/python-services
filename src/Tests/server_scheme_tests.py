@@ -1,6 +1,5 @@
 import importlib
 
-import mongomock
 import pytest
 from flask import url_for
 
@@ -10,9 +9,7 @@ def make_app(monkeypatch):
     """Cria o app com as variáveis dadas. configmodule lê o ambiente na
     importação, por isso é recarregado (e recarregado de novo no fim)."""
     import configmodule
-    from DAL import MongoDBConnectionFactory
-    monkeypatch.setattr(MongoDBConnectionFactory, "_client", mongomock.MongoClient())
-    monkeypatch.setattr(MongoDBConnectionFactory, "_database", "test-scheme")
+    # Mongo em memória: conftest.py (mongo_in_memory).
 
     def build(**env):
         for name, value in env.items():

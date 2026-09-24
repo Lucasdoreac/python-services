@@ -40,3 +40,11 @@ pydantic-settings = "^2.7"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+# Os arquivos de teste se chamam *_tests.py, que o pytest não descobre por
+# padrão: sem isto, `pytest` puro rodava só 25 dos 83 testes. Fonte única
+# para o CI e para o dev-local (src/Tests/test_discovery_tests.py).
+testpaths = ["src/Tests"]
+python_files = ["*_tests.py", "*_test.py", "test_*.py"]
+pythonpath = ["src"]

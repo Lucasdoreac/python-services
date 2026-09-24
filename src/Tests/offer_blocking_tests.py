@@ -1,6 +1,5 @@
 import re
 
-import mongomock
 import pytest
 import requests
 
@@ -35,9 +34,7 @@ def offers():
 
 @pytest.fixture
 def client(monkeypatch, offers):
-    from DAL import MongoDBConnectionFactory
-    monkeypatch.setattr(MongoDBConnectionFactory, "_client", mongomock.MongoClient())
-    monkeypatch.setattr(MongoDBConnectionFactory, "_database", "test-offers")
+    # Mongo em memória: conftest.py (mongo_in_memory).
     monkeypatch.setattr('SLL.auth_decorators.token_required', lambda f: f)
     monkeypatch.setenv("URL_restapi", "http://internal/restapi")
     monkeypatch.setenv("URL_graph", "http://internal/graphql/")
