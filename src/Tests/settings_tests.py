@@ -63,3 +63,14 @@ def test_empty_cloud_function_url_counts_as_undefined(monkeypatch):
         EmailSettings()
 
     assert "CLOUD_FUNCTION_URL" in str(error.value)
+
+
+@pytest.mark.parametrize("value", ["", "   "])
+def test_empty_offer_period_hours_falls_back_to_default(monkeypatch, value):
+    # `OFFER_PERIOD_HOURS=` vazio (comum em compose/.env) virava {} e nenhuma
+    # aula bloqueava sala, em silêncio. Vazio agora vale o padrão.
+    from datetime import time
+    from settings import OfferSettings
+    monkeypatch.setenv("OFFER_PERIOD_HOURS", value)
+
+    assert OfferSettings().hours_for("NOITE") == (time(19, 0), time(23, 0))

@@ -128,6 +128,10 @@ class OfferSettings(BaseSettings):
     def _parse(cls, value):
         if not isinstance(value, str):
             return value
+        if not value.strip():
+            # Vazio (`OFFER_PERIOD_HOURS=` no compose/.env) vale o padrão: antes
+            # virava {} e nenhuma aula bloqueava sala, sem aviso.
+            value = DEFAULT_OFFER_PERIOD_HOURS
         hours = {}
         for item in filter(None, (part.strip() for part in value.split(","))):
             name, _, span = item.partition("=")
