@@ -15,11 +15,8 @@ ENV PATH="/root/.local/bin:$PATH"
 
 RUN poetry config virtualenvs.create false
 
-# `poetry lock` antes do install: pyproject.toml ganhou sib-api-v3-sdk (já
-# usado no código, nunca declarado) e o poetry.lock existente não reflete
-# isso. Regenerar no build evita "pyproject.toml changed significantly
-# since poetry.lock was last generated".
-RUN poetry lock
+# O poetry.lock versionado é a fonte da verdade (`poetry check --lock` passa);
+# o build não re-resolve dependências.
 RUN poetry install --no-root
 
 EXPOSE 5000
