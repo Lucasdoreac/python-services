@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Edição requisitada pela Coordenação</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f9f9f9; margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: auto; background: #fff; border: 1px solid #ddd; padding: 20px; text-align: center; }
+        .header { background: #0D5580; color: #fff; padding: 10px; margin: -20px -20px 20px; }
+        .header h1 { margin: 0; }
+        .mensagem { background: #f5f5f5; border: 1px solid #ddd; border-radius: 5px; padding: 15px; margin: 20px 0; text-align: left; white-space: pre-wrap; }
+        .botao { background: #28a745; border: none; border-radius: 25px; padding: 10px 40px; color: #fff; font-size: 16px; text-decoration: none; display: inline-block; }
+        .erro { color: #b00020; }
+        textarea { width: 100%; box-sizing: border-box; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header"><h1>Edição requisitada pela Coordenação</h1></div>
+        <p>A Coordenação do curso pediu mudanças no seu evento antes de aprová-lo:</p>
+        <div class="mensagem">{{ mensagem }}</div>
+        <p>Edite o evento e envie de novo. A reserva da sala continua valendo.</p>
+        <a href="{{ edit_link }}" class="botao">Editar o evento</a>
+    </div>
+</body>
+</html>

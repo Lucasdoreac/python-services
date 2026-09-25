@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Requisitar edição</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f9f9f9; margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: auto; background: #fff; border: 1px solid #ddd; padding: 20px; text-align: center; }
+        .header { background: #0D5580; color: #fff; padding: 10px; margin: -20px -20px 20px; }
+        .header h1 { margin: 0; }
+        .mensagem { background: #f5f5f5; border: 1px solid #ddd; border-radius: 5px; padding: 15px; margin: 20px 0; text-align: left; white-space: pre-wrap; }
+        .botao { background: #28a745; border: none; border-radius: 25px; padding: 10px 40px; color: #fff; font-size: 16px; text-decoration: none; display: inline-block; }
+        .erro { color: #b00020; }
+        textarea { width: 100%; box-sizing: border-box; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header"><h1>Requisitar edição</h1></div>
+        <p>Descreva o que precisa mudar. A pessoa solicitante recebe esta mensagem por e-mail,
+           com o link para editar e reenviar o evento.</p>
+        {% if erro %}<p class="erro">{{ erro }}</p>{% endif %}
+        <form action="{{ url_for('templates_bp.request_changes', eventId=eventId, tokenId=tokenId) }}" method="post">
+            <textarea name="mudancas" rows="6" required placeholder="Ex.: trocar a sala para o auditório."></textarea>
+            <p><button type="submit" class="botao">Enviar pedido</button></p>
+        </form>
+    </div>
+</body>
+</html>

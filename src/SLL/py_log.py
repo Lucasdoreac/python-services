@@ -41,6 +41,7 @@ class Logmessage(Enum):
     FAILED_SEND_EMAIL = "Email sender service unavailable: failed to send email; IP: {ip_address}; Email: {email};"
     SENDING_EMAIL = "Sending email; email: {email}; event: {event}; token: {token};"
     EVENT_APPROVED_REJECTED_BY = "Event {event_id} {action} by {who}; token: {token};"
+    EVENT_CHANGES_REQUESTED = "Event {event_id} changes requested by coordenacao; token: {token};"
     # Padronizado no formato "<mensagem>; IP: {ip_address};" -- já era o
     # formato usado pela maioria dos membros abaixo; MISSING_DATA e
     # EVENTS_NOT_FOUND tinham espaçamento divergente (sem espaço antes de

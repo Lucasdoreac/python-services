@@ -1,7 +1,8 @@
 import os
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, render_template
 from BLL import send_to_reitoria, send_to_coordenacao, send_event_status, send_reservation_info_to_reitoria
-from BLL.send_emails import verify_token_from_email, apply_token_action
+from BLL.send_emails import verify_token_from_email, request_event_changes, token_step
+from utils.enums import EmailStep
 from functools import wraps
 from settings import get_email_settings
 
@@ -73,19 +74,30 @@ def reject():
     return "Evento rejeitado!"
 
 
-@templates_bp.route('/request_changes')
+@templates_bp.route('/request_changes', methods=['GET', 'POST'])
 @check_request
 def request_changes():
-    # Add your business logic for requesting changes to the event here.
+    """
+    Link "Solicitar alterações" do e-mail da Coordenação (issue #35).
+    GET abre o formulário; POST grava o pedido e avisa a pessoa solicitante.
+    Só a Coordenação pede mudança: token de outra etapa dá 403.
+    """
     eventId = request.args.get('eventId')
-    who = request.args.get('who')
     token = request.args.get('tokenId')
+    if token_step(token) != EmailStep.COORDENACAO.value:
+        return "Só a Coordenação pode pedir mudanças.", 403
 
-    if who == 'coordenacao':
-        apply_token_action(0, "Request Changes", eventId, token)
-    else:
-        apply_token_action(1, "Request Changes", eventId, token)
-    return "Solicitando alterações no evento!"
+    if request.method == 'GET':
+        return render_template('email/pedir_mudancas.html', eventId=eventId, tokenId=token)
+
+    message = (request.form.get('mudancas') or '').strip()
+    if not message:
+        return render_template('email/pedir_mudancas.html', eventId=eventId, tokenId=token,
+                               erro='Descreva as mudanças.'), 400
+    sent = request_event_changes(eventId, message, token)
+    if get_email_settings().email_dry_run:
+        return sent
+    return "Pedido de mudança enviado à pessoa solicitante."
 
 
 @templates_bp.route('/notify_reservation', methods=['GET'])

@@ -13,6 +13,7 @@ Variáveis:
     EMAIL_RECIPIENTS_REITORIA      e-mails separados por vírgula
     CLOUD_FUNCTION_URL             obrigatória quando EMAIL_DRY_RUN=false
     CLOUD_FUNCTION_API_KEY         obrigatória quando EMAIL_DRY_RUN=false
+    FRONTEND_URL                   endereço público do front (links nos e-mails)
     AUTH_ALLOWED_DOMAIN            domínio que pode pedir link de login (padrão udf.edu.br)
     AUTH_ALLOWED_EMAILS            exceções individuais, separadas por vírgula
     OFFER_PERIOD_HOURS             horário de cada período de aula, "manhã=07:00-12:00,..."
@@ -33,6 +34,8 @@ class EmailSettings(BaseSettings):
     email_recipients_reitoria: Annotated[list[str], NoDecode] = []
     cloud_function_url: str | None = None
     cloud_function_api_key: str | None = None
+    # front do Reservas: link "editar o evento" no e-mail de pedido de mudança
+    frontend_url: str = "http://localhost:3000"
 
     @field_validator("email_recipients_coordenacao", "email_recipients_reitoria", mode="before")
     @classmethod

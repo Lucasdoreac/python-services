@@ -291,6 +291,37 @@ def send_event_status(event_id, is_approved: bool, who: str, token:str):
     subject = "Evento Aprovado" if is_approved else "Evento Não Aprovado"
     return _deliver(subject, html_content, [email], event_id, token)
 
+def request_event_changes(event_id: str, message: str, token: str):
+    """
+    Coordenação pede mudança (issue #35): o evento vai para requested_change,
+    a mensagem fica em event["changesRequested"] e a pessoa solicitante
+    recebe o pedido com o link para editar o evento no front. A reserva da
+    sala continua: o evento volta para aprovação quando for reenviado.
+    """
+    AppLogger.log(Logmessage.EVENT_CHANGES_REQUESTED, LogType.INFO, event_id=event_id, token=token)
+    apply_token_action(EmailStep.COORDENACAO.value, 'requested_change', event_id, token)
+
+    event = events_repository.find_by_id(event_id)
+    email = event["organizer"]["email"]
+    event.pop("_id", None)
+    event["status"] = EventStatus.REQUESTED_CHANGE.value
+    event["changesRequested"] = message
+    ReservationManager().update_event(event_id, event_data=event)
+
+    html_content = render_template(
+        "email/mudancas_solicitadas.html",
+        mensagem=message,
+        edit_link=f"{get_email_settings().frontend_url.rstrip('/')}/event/type-selection?eventId={event_id}",
+    )
+    return _deliver("Evento: a Coordenação pediu mudanças", html_content, [email], event_id, token)
+
+
+def token_step(tokenId):
+    """Etapa (EmailStep) do token do e-mail, ou None se não existe."""
+    records = send_email_repository.get_send_email_by_token_id(tokenId)
+    return next((r.get("step") for r in records if r.get("tokenId") == tokenId), None)
+
+
 # Enquanto o token está active, qual status o evento precisa ter pra essa
 # etapa ainda estar de fato pendente. Se o evento já saiu desse status (foi
 # decidido por outro caminho -- outro token, outra aba, um clique
