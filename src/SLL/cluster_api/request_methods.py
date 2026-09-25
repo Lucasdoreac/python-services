@@ -47,7 +47,35 @@ class RestApiRequestMethods:
             raise Exception("Variavel de ambiente não existe ou não esta sendo acessada!")
         return url
 
+    @staticmethod
+    def set_offer_weekdays(offer_id: str, weekdays):
+        """PATCH no catálogo; devolve (status, corpo) para a rota repassar 400/404."""
+        response = requests.patch(RestApiRequestMethods.generate_url(f"offers/{offer_id}/weekdays"),
+                                  json={"weekdays": weekdays}, headers=catalog_headers())
+        return response.status_code, response.json()
+
+
 class GraphQlRequestMethods:
+
+    OFFERS_PAGE_QUERY = """query($year: Int, $semester: Int, $discipline: String, $first: Int, $skip: Int) {
+        offers(searchYear: $year, searchSemester: $semester, searchDiscipline: $discipline, first: $first, skip: $skip) {
+            id offerId weekdays
+            discipline { name } period { name } room { name } teacher { name } campus { name }
+        }
+    }"""
+
+    @staticmethod
+    def get_offers_page(year: int, semester: int, discipline: str | None, first: int, skip: int):
+        """Uma página de ofertas com os nomes para a tela de ofertas. Variáveis
+        GraphQL (não f-string): o nome da disciplina vem digitado na tela."""
+        variables = {"year": year, "semester": semester, "discipline": discipline or None,
+                     "first": first, "skip": skip}
+        response = requests.post(f"{os.getenv('URL_graph')}", headers=catalog_headers(),
+                                 json={"query": GraphQlRequestMethods.OFFERS_PAGE_QUERY, "variables": variables})
+        data = response.json()
+        if response.status_code != 200 or "errors" in data:
+            raise Exception(f"Erro ao buscar ofertas no shared-resources: {data.get('errors')}")
+        return data.get("offers") or []
 
     @staticmethod
     def get_disciplines_request():

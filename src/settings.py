@@ -118,13 +118,26 @@ class OfferSettings(BaseSettings):
     A oferta só traz o nome do período (MANHÃ/TARDE/NOITE na planilha da UDF).
     Os horários padrão são provisórios, até virem do calendário acadêmico.
 
-    Variável:
+    Variáveis:
         OFFER_PERIOD_HOURS  "periodo=HH:MM-HH:MM,..." (padrão: DEFAULT_OFFER_PERIOD_HOURS)
+        OFFER_ADMIN_EMAILS  e-mails (vírgula) que podem marcar os dias da semana das
+                            ofertas pela tela; vazio (padrão) = ninguém
     """
 
     model_config = SettingsConfigDict(extra="ignore", validate_default=True)
 
     offer_period_hours: Annotated[dict[str, tuple[time, time]], NoDecode] = DEFAULT_OFFER_PERIOD_HOURS
+    offer_admin_emails: Annotated[list[str], NoDecode] = []
+
+    @field_validator("offer_admin_emails", mode="before")
+    @classmethod
+    def _split_emails(cls, value):
+        if isinstance(value, str):
+            return [item.strip().lower() for item in value.split(",") if item.strip()]
+        return value
+
+    def can_manage_offers(self, email: str | None) -> bool:
+        return (email or "").strip().lower() in self.offer_admin_emails
 
     @field_validator("offer_period_hours", mode="before")
     @classmethod

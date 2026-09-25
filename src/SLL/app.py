@@ -35,12 +35,14 @@ def create_app(config_class):
     from .types_routes import types_bp
     from .resource_routes import resources_bp
     from .administration_approval import templates_bp
+    from .offers_admin_routes import offers_admin_bp
     
     # Blueprints register
     app.register_blueprint(auth_bp)
     app.register_blueprint(reservation_bp)
     app.register_blueprint(events_bp)
     app.register_blueprint(types_bp)
+    app.register_blueprint(offers_admin_bp)
     app.register_blueprint(resources_bp)
     app.register_blueprint(templates_bp)
 
