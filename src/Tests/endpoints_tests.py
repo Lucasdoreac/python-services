@@ -43,7 +43,7 @@ class TestEndpoints:
         # batia com nenhuma dessas chaves.
         payload = {
             "eventId": "66193fb3e764a62988bbcf32",
-            "reservationDate": "2024-04-25T10:00:00.000Z",
+            "reservationDate": "2031-04-25T10:00:00.000Z",
             "roomId": "661945b2e764a62988bbcf3e",
         }
 

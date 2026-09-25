@@ -222,7 +222,7 @@ def get_swagger_specification(path, method=None, resource=None):
                 }}}},
                 "responses": {
                     "200": {"description": "Evento enviado; corpo {eventId}"},
-                    "400": {"description": "Faltou roomId/reservationDate ou data inválida"},
+                    "400": {"description": "Faltou roomId/reservationDate, data inválida ou no passado"},
                     "409": {"description": "Sala ocupada por outro evento; nada foi gravado"},
                     "500": {"description": "Evento não gravou; a reserva criada foi desfeita"},
                 },

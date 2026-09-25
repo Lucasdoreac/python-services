@@ -2,7 +2,7 @@ import os
 from typing import Any, Dict
 import requests
 from flask import jsonify
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from DAL import *
 from DAL.collections_repositories import EventsRepository
 from SLL.cluster_api.request_methods import RestApiRequestMethods, GraphQlRequestMethods, catalog_headers
@@ -16,6 +16,25 @@ rooms_repository = RoomsRepository()
 types_repository = TypesRepository()
 reservations_repository = ReservationsRepository()
 events_repository = EventsRepository()
+
+# O front manda o horário de Brasília marcado com 'Z' (formatDateForMongoDB
+# desloca o fuso). Brasília não tem horário de verão desde 2019: UTC-3 fixo.
+BRASILIA = timezone(timedelta(hours=-3))
+
+
+def parse_reservation_start(reservation_date_str: str, now_utc: datetime = None) -> datetime:
+    """
+    Converte o início da reserva e recusa data no passado.
+
+    Raises:
+        ValueError: fora do formato ISO com 'Z', ou antes de agora (horário de Brasília).
+    """
+    start = datetime.strptime(reservation_date_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+    now_utc = now_utc or datetime.now(timezone.utc).replace(tzinfo=None)
+    now_brasilia = now_utc.replace(tzinfo=timezone.utc).astimezone(BRASILIA).replace(tzinfo=None)
+    if start < now_brasilia:
+        raise ValueError("reservationDate no passado")
+    return start
 
 
 class FlowController:
@@ -63,9 +82,7 @@ class FlowController:
             reservation_date_str = data["reservationDate"]
             room_id = data["roomId"]
 
-            reservation_date = datetime.strptime(reservation_date_str, "%Y-%m-%dT%H:%M:%S.%fZ")
-
-            reservation_start = reservation_date
+            reservation_start = parse_reservation_start(reservation_date_str)
             reservation_end = reservation_start + timedelta(hours=3)
 
 
@@ -98,10 +115,10 @@ class FlowController:
         é conflito e não deve ser desfeita. Senão cria e devolve a reserva nova.
 
         Raises:
-            ValueError: data fora do formato ISO com 'Z'.
+            ValueError: data fora do formato ISO com 'Z' ou no passado.
             ReservationConflict: horário ocupado por outro evento.
         """
-        start = datetime.strptime(reservation_date_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+        start = parse_reservation_start(reservation_date_str)
         end = start + timedelta(hours=3)
         manager = ReservationManager()
         if manager.find_active_reservation(event_id, room_id, start):
