@@ -1,3 +1,6 @@
+from functools import wraps
+
+from bson import ObjectId
 from flask import Blueprint, jsonify, request, make_response
 from flasgger import swag_from
 
@@ -12,6 +15,23 @@ from DAL import ReservationConflict
 
 # Define your Flask Blueprint
 events_bp = Blueprint('events', __name__)
+
+
+def owner_required(f):
+    """Só quem criou o evento altera ou envia (o e-mail do header já foi validado
+    pelo token_required). Antes, qualquer pessoa logada reescrevia o evento de outra."""
+    @wraps(f)
+    def decorated(event_id, *args, **kwargs):
+        event = FlowController.find_event_by_event_id(event_id) if ObjectId.is_valid(event_id) else None
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+        dono = ((event.get("organizer") or {}).get("email") or "").strip().lower()
+        if dono != (request.headers.get('email') or "").strip().lower():
+            AppLogger.log(f"Evento {event_id}: alteração recusada para quem não é o organizador",
+                          LogType.WARNING, ip_address=request.remote_addr)
+            return jsonify({'error': 'Only the organizer can change this event'}), 403
+        return f(event_id, *args, **kwargs)
+    return decorated
 
 
 def _status(result):
@@ -118,6 +138,7 @@ class EventsRoutes:
 
     @events_bp.route('/events/<string:event_id>', methods=['PUT'])
     @token_required
+    @owner_required
     @swag_from(get_swagger_specification(path='events', method='PUT'))
     def put_event(event_id):
         """
@@ -154,6 +175,7 @@ class EventsRoutes:
     @staticmethod
     @events_bp.route('/events/<string:event_id>/submit', methods=['POST'])
     @token_required
+    @owner_required
     @swag_from(get_swagger_specification(path='events', method='SUBMIT'))
     def submit_event(event_id):
         """
