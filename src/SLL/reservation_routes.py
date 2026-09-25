@@ -3,6 +3,7 @@ from flasgger import swag_from
 from .swagger_docs import get_swagger_specification
 from .auth_decorators import token_required
 from BLL import FlowController
+from .ownership import ownership_error
 from SLL.py_log import AppLogger,LogType,Logmessage
 
 
@@ -24,6 +25,9 @@ class ReservationRoutes:
             )
             return jsonify({'error': 'Missing date'}), 400
 
+        negado = ownership_error(data.get('eventId'))
+        if negado:
+            return negado
         if FlowController.is_reserved(data['reservationDate'], data["roomId"]):
             return jsonify({'error': 'Room already reserved for this time'}), 409
         return FlowController.register_reservation_from_json(data)

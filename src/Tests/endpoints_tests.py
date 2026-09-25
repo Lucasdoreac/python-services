@@ -41,13 +41,18 @@ class TestEndpoints:
         # data["eventId"], data["reservationDate"] e data["roomId"] -- o
         # payload antigo (room_id/course_id/date/start_time/end_time) não
         # batia com nenhuma dessas chaves.
+        # Só quem criou o evento reserva sala para ele: o evento precisa existir
+        # e o e-mail do header ser o do organizador.
+        evento = {"tituloEvento": "Palestra", "classificacao": "lecture", "odsId": "1", "descricaoEvento": "d"}
+        event_id = client.post('/events', json=evento,
+                               headers={"email": "prof@udf.edu.br"}).get_json()["eventId"]
         payload = {
-            "eventId": "66193fb3e764a62988bbcf32",
+            "eventId": event_id,
             "reservationDate": "2031-04-25T10:00:00.000Z",
             "roomId": "661945b2e764a62988bbcf3e",
         }
 
-        response = client.post('/reservations', json=payload)
+        response = client.post('/reservations', json=payload, headers={"email": "prof@udf.edu.br"})
 
         assert response.status_code == 201
         assert response.get_json() == {'success': "Reservation attempted"}

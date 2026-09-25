@@ -77,7 +77,8 @@ def test_retry_with_own_reservation_is_not_a_conflict(client):
     event_id, event = new_draft(client)
     s = slot()
     # Situação que o fluxo antigo deixava: reserva gravada, evento em rascunho.
-    assert client.post('/reservations', json={"eventId": event_id, **s}).status_code == 201
+    assert client.post('/reservations', json={"eventId": event_id, **s},
+                       headers={"email": "prof@udf.edu.br"}).status_code == 201
     res = client.post(f'/events/{event_id}/submit', json={**event, **s},
                       headers={"email": "prof@udf.edu.br"})
     assert res.status_code == 200, res.get_json()
@@ -89,7 +90,8 @@ def test_room_taken_by_another_event_is_409_and_event_untouched(client):
     other_id, _ = new_draft(client)
     event_id, event = new_draft(client)
     s = slot()
-    assert client.post('/reservations', json={"eventId": other_id, **s}).status_code == 201
+    assert client.post('/reservations', json={"eventId": other_id, **s},
+                       headers={"email": "prof@udf.edu.br"}).status_code == 201
     res = client.post(f'/events/{event_id}/submit', json={**event, **s},
                       headers={"email": "prof@udf.edu.br"})
     assert res.status_code == 409

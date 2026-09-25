@@ -80,3 +80,13 @@ def test_owner_still_updates_and_submits(client):
 
 def test_unknown_event_is_404(client):
     assert client.put('/events/64b000000000000000000000', json=EVENTO, headers=h(DONA)).status_code == 404
+
+
+def test_other_user_cannot_reserve_a_room_for_the_event(client):
+    # Rota antiga (o front usa /submit desde o #64), mas continua no ar.
+    event_id = rascunho(client)
+    n = next(_slots)
+    slot = {"eventId": event_id, "roomId": f"sala-dono-{n}", "reservationDate": f"2031-06-{n:02d}T10:00:00.000Z"}
+    assert client.post('/reservations', json=slot, headers=h(OUTRA)).status_code == 403
+    assert list(MongoDBConnectionFactory.get_db().reservations.find({"eventId": event_id})) == []
+    assert client.post('/reservations', json=slot, headers=h(DONA)).status_code == 201

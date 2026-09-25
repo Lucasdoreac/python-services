@@ -37,8 +37,10 @@ def reservations_in(room_id):
 
 def test_post_reservation_in_the_past_is_rejected(client):
     room = f"sala-passado-{next(_rooms)}"
-    res = client.post('/reservations', json={
-        "eventId": "66193fb3e764a62988bbcf32", "reservationDate": PAST, "roomId": room})
+    event = {"tituloEvento": "Palestra", "classificacao": "lecture", "odsId": "1", "descricaoEvento": "d"}
+    event_id = client.post('/events', json=event, headers={"email": "prof@udf.edu.br"}).get_json()["eventId"]
+    res = client.post('/reservations', json={"eventId": event_id, "reservationDate": PAST, "roomId": room},
+                      headers={"email": "prof@udf.edu.br"})
     assert res.status_code == 400
     assert reservations_in(room) == []
 
