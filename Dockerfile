@@ -3,7 +3,7 @@
 # + pip install ad-hoc a cada `up`, sem lockfile, sem imagem de verdade.
 # Escrito seguindo o mesmo padrão do PR #25 (shared-resources): Poetry +
 # Gunicorn, imagem construída.
-FROM python:3.13.3-slim
+FROM python:3.13.15-slim
 
 WORKDIR /python-services
 
