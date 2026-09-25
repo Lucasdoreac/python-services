@@ -1,0 +1,28 @@
+# Testes a cada push e pull request. Mesmo caminho do dev-local/run-tests.sh:
+# constrói a imagem do Dockerfile de produção e roda o pytest dentro dela
+# (assim o teste de conteúdo da imagem confere a imagem de verdade).
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Imagem (Dockerfile de produção)
+        run: docker build -t reservas-api-tests .
+
+      - name: pytest dentro da imagem
+        run: >-
+          docker run --rm
+          -e MONGO_URI=mongodb://localhost:27017/
+          -e MONGO_DATABASE=rooms-reservation-app
+          -e FLASK_ENV=development
+          -e SERVER_NAME=localhost:5000
+          reservas-api-tests
+          poetry run pytest -v
