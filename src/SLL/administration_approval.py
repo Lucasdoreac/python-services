@@ -1,5 +1,7 @@
 import os
 from flask import Blueprint, request, jsonify, render_template
+from flasgger import swag_from
+from SLL.swagger_docs import get_swagger_specification
 from BLL import send_to_reitoria, send_to_coordenacao, send_event_status, send_reservation_info_to_reitoria
 from BLL.send_emails import verify_token_from_email, request_event_changes, token_step
 from utils.enums import EmailStep
@@ -30,6 +32,7 @@ def check_request(f):
 
 
 @templates_bp.route('/administration_approval', methods=['GET', 'POST'])
+@swag_from(get_swagger_specification('approval', 'ADMIN'))
 @check_request
 def administration_approval():
     eventId = request.args.get('eventId')
@@ -47,6 +50,7 @@ def administration_approval():
 
 
 @templates_bp.route('/approve')
+@swag_from(get_swagger_specification('approval', 'APPROVE'))
 @check_request
 def approve():
     eventId = request.args.get('eventId')
@@ -62,6 +66,7 @@ def approve():
 
 
 @templates_bp.route('/reject')
+@swag_from(get_swagger_specification('approval', 'REJECT'))
 @check_request
 def reject():
     eventId = request.args.get('eventId')
@@ -75,6 +80,9 @@ def reject():
 
 
 @templates_bp.route('/request_changes', methods=['GET', 'POST'])
+# Um arquivo por método: com dicionário o flasgger ignora `methods`.
+@swag_from('swagger_specs/request_changes_get.yml', methods=['GET'])
+@swag_from('swagger_specs/request_changes_post.yml', methods=['POST'])
 @check_request
 def request_changes():
     """
@@ -101,6 +109,7 @@ def request_changes():
 
 
 @templates_bp.route('/notify_reservation', methods=['GET'])
+@swag_from(get_swagger_specification('approval', 'NOTIFY'))
 def notify_reservation():
     """
     Endpoint para notificar a reitoria sobre uma nova reserva.

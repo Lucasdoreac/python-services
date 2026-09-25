@@ -81,6 +81,7 @@ class ResourcesRoutes:
     @staticmethod
     @resources_bp.route('/rooms', methods=['GET'])
     @token_required
+    @swag_from(get_swagger_specification(path='rooms', method='GET', resource='by-id'))
     def get_rooms_by_id():
         try:
             room_id = request.args.get("roomId")

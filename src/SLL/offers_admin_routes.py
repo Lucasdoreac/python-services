@@ -6,12 +6,14 @@ estas rotas; o login do Reservas não tem papéis."""
 from datetime import date
 from functools import wraps
 
+from flasgger import swag_from
 from flask import Blueprint, jsonify, request
 
 from settings import get_offer_settings
 from SLL.auth_decorators import token_required
 from SLL.cluster_api.request_methods import GraphQlRequestMethods, RestApiRequestMethods
 from SLL.py_log import AppLogger, LogType
+from SLL.swagger_docs import get_swagger_specification
 
 offers_admin_bp = Blueprint('offers_admin_bp', __name__)
 PAGE_SIZE = 20
@@ -35,6 +37,7 @@ def _flat(offer):
 
 @offers_admin_bp.route('/auth/permissions', methods=['GET'])
 @token_required
+@swag_from(get_swagger_specification('auth', 'PERMISSIONS'))
 def permissions():
     """O que a pessoa logada pode ver no front (hoje: a tela de ofertas)."""
     return jsonify({"manageOffers": get_offer_settings().can_manage_offers(request.headers.get('email'))})
@@ -42,6 +45,7 @@ def permissions():
 
 @offers_admin_bp.route('/offers/manage', methods=['GET'])
 @offers_admin_required
+@swag_from(get_swagger_specification('offers', 'MANAGE'))
 def list_offers():
     today = date.today()
     year = request.args.get('year', today.year, type=int)
@@ -60,6 +64,7 @@ def list_offers():
 
 @offers_admin_bp.route('/offers/<string:offer_id>/weekdays', methods=['PUT'])
 @offers_admin_required
+@swag_from(get_swagger_specification('offers', 'WEEKDAYS'))
 def set_weekdays(offer_id):
     weekdays = (request.get_json(silent=True) or {}).get("weekdays")
     try:

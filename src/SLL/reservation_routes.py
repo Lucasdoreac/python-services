@@ -46,6 +46,7 @@ class ReservationRoutes:
     @staticmethod
     @reservation_bp.route('/reservations', methods=['GET'])
     @token_required
+    @swag_from(get_swagger_specification(path='reservations', method='GET', resource='by-event'))
     def get_reservations_by_event_id():
         event_id = request.args.get('eventId')
         if not event_id:

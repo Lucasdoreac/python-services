@@ -1,0 +1,35 @@
+# Gerado de SLL/swagger_extra.py (JSON é YAML válido); um arquivo por método.
+{
+  "tags": [
+    "Approval"
+  ],
+  "summary": "Formulário de pedido de mudança (link do e-mail da Coordenação)",
+  "description": "Abre o formulário onde a Coordenação escreve o que mudar. Não decide nada.",
+  "parameters": [
+    {
+      "in": "query",
+      "name": "eventId",
+      "type": "string",
+      "required": true,
+      "description": "id do evento"
+    },
+    {
+      "in": "query",
+      "name": "tokenId",
+      "type": "string",
+      "required": true,
+      "description": "Token de uso único enviado no e-mail de aprovação"
+    }
+  ],
+  "responses": {
+    "200": {
+      "description": "Formulário HTML"
+    },
+    "403": {
+      "description": "Token não é da Coordenação"
+    },
+    "404": {
+      "description": "Token inexistente, já usado ou o evento já saiu desta etapa"
+    }
+  }
+}

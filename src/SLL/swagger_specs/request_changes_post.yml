@@ -1,0 +1,44 @@
+# Gerado de SLL/swagger_extra.py (JSON é YAML válido); um arquivo por método.
+{
+  "tags": [
+    "Approval"
+  ],
+  "summary": "Enviar o pedido de mudança",
+  "description": "Evento vai para requested_change, a mensagem fica em changesRequested e a pessoa solicitante recebe o pedido com o link de edição (FRONTEND_URL). Com EMAIL_DRY_RUN=true (padrão em dev) a rota devolve o HTML do e-mail em vez de enviá-lo.",
+  "parameters": [
+    {
+      "in": "query",
+      "name": "eventId",
+      "type": "string",
+      "required": true,
+      "description": "id do evento"
+    },
+    {
+      "in": "query",
+      "name": "tokenId",
+      "type": "string",
+      "required": true,
+      "description": "Token de uso único enviado no e-mail de aprovação"
+    },
+    {
+      "in": "formData",
+      "name": "mudancas",
+      "type": "string",
+      "required": true
+    }
+  ],
+  "responses": {
+    "200": {
+      "description": "Pedido enviado"
+    },
+    "400": {
+      "description": "Mensagem vazia"
+    },
+    "403": {
+      "description": "Token não é da Coordenação"
+    },
+    "404": {
+      "description": "Token inexistente, já usado ou o evento já saiu desta etapa"
+    }
+  }
+}

@@ -1,4 +1,7 @@
 def get_swagger_specification(path, method=None, resource=None):
+    from .swagger_extra import SPECS  # rotas que não tinham documentação
+    if (path, method, resource) in SPECS:
+        return SPECS[(path, method, resource)]
     if path == '/health':
         return {
             "summary": "Health Check",
