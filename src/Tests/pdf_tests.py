@@ -41,13 +41,19 @@ def fakes(monkeypatch, pdf):
     monkeypatch.setenv("MINIO_SECRET_KEY", "s")
 
 
-def test_pdf_path_uses_the_configured_minio_url(monkeypatch, pdf):
+def a_pdf(tmp_path):
+    path = tmp_path / "evento.pdf"
+    path.write_bytes(b"%PDF-1.7 teste")
+    return str(path)
+
+
+def test_pdf_path_uses_the_configured_minio_url(monkeypatch, pdf, tmp_path):
     # O caminho gravado era fixo em dwcorp.com.br:9000 (host de produção sem
     # esquema), então nenhum outro ambiente achava o PDF. Agora segue
     # MINIO_URL, igual ao link do PDF nos e-mails (send_emails.py).
     monkeypatch.setenv("MINIO_URL", "http://minio.exemplo:9000")
 
-    pdf.save_pdf("ev1", "PDFs/evento.pdf")
+    pdf.save_pdf("ev1", a_pdf(tmp_path))
 
     assert FakeMinio.uploads == [("minio.exemplo:9000", "labtech", "reservation-pdfs/ev1.pdf")]
     assert FakeReservationManager.saved == [
@@ -55,10 +61,10 @@ def test_pdf_path_uses_the_configured_minio_url(monkeypatch, pdf):
     ]
 
 
-def test_trailing_slash_in_minio_url_does_not_double(monkeypatch, pdf):
+def test_trailing_slash_in_minio_url_does_not_double(monkeypatch, pdf, tmp_path):
     monkeypatch.setenv("MINIO_URL", "https://arquivos.udf.edu.br/")
 
-    pdf.save_pdf("ev2", "PDFs/evento.pdf")
+    pdf.save_pdf("ev2", a_pdf(tmp_path))
 
     assert FakeReservationManager.saved[0]["path"] == "https://arquivos.udf.edu.br/labtech/reservation-pdfs/ev2.pdf"
 
@@ -74,17 +80,15 @@ def event(name):
 
 
 def test_generating_pdf_does_not_touch_tracked_files_nor_share_a_path(monkeypatch, pdf):
-    # Antes todo evento escrevia em PDFs/evento.pdf (versionado): rodar o fluxo
+    # Antes todo evento escrevia em PDFs/evento.pdf (ex-versionado): rodar o fluxo
     # sujava o git e duas aprovações simultâneas podiam subir o PDF de um
     # evento com o nome do outro (DEV-01).
-    import hashlib, pathlib
+    import pathlib
     monkeypatch.setenv("MINIO_URL", "http://minio:9000")
     events = {"ev-a": event("Evento A"), "ev-b": event("Evento B")}
     monkeypatch.setattr(pdf.FlowController, "find_types_by_collection", lambda c: {"types": [{"id": "3", "name": "Saúde"}]})
     monkeypatch.setattr(pdf.FlowController, "find_event_by_event_id", lambda i: events[i])
     monkeypatch.setattr(pdf.FlowController, "find_reservation_by_event_id", lambda i: [])
-    tracked = {f: hashlib.sha256(pathlib.Path(f).read_bytes()).hexdigest()
-               for f in ("PDFs/evento.pdf", "PDFs/evento.typ")}
 
     pdf.generate_event_pdf("ev-a")
     pdf.generate_event_pdf("ev-b")
@@ -94,4 +98,4 @@ def test_generating_pdf_does_not_touch_tracked_files_nor_share_a_path(monkeypatc
     assert len(set(paths)) == 2
     assert not any(pathlib.Path(p).resolve().is_relative_to(pathlib.Path("PDFs").resolve()) for p in paths)
     assert not any(pathlib.Path(p).exists() for p in paths)  # temporário apagado
-    assert tracked == {f: hashlib.sha256(pathlib.Path(f).read_bytes()).hexdigest() for f in tracked}
+    assert not pathlib.Path("PDFs").exists()  # nada escrito na árvore do repo
