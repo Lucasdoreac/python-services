@@ -98,6 +98,19 @@ class ReservationManager:
             raise ReservationConflict("This time slot is already booked.")
         return reservation
 
+    def find_active_reservation(self, event_id, room_id, start_at):
+        """Reserva ativa deste evento nesta sala e horário (uma nova tentativa de envio)."""
+        return self.reservation_collection.find_one({
+            "eventId": event_id,
+            "roomId": room_id,
+            "startAt": start_at,
+            "status": {"$in": ACTIVE_RESERVATION_STATUSES},
+        })
+
+    def delete_reservation(self, reservation_id):
+        """Desfaz uma reserva recém-criada quando o envio do evento falha."""
+        self.reservation_collection.delete_one({"_id": reservation_id})
+
     def find_unavailable_room_ids_by_date(self, date_str: str, time_str: str):
         """
         Recebe uma data no formato 'YYYY-MM-DD' e um horário no formato 'HH:MM:SS'

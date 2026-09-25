@@ -202,6 +202,32 @@ def get_swagger_specification(path, method=None, resource=None):
                 }
             }
 
+        if method == 'SUBMIT':
+            return {
+                "summary": "Enviar evento para aprovação reservando a sala",
+                "description": "Reserva a sala e envia o evento (status requested) numa requisição só. "
+                               "Se o evento não gravar, a reserva criada é desfeita; se o próprio evento "
+                               "já tem a reserva (tentativa anterior), ela é reaproveitada.",
+                "tags": ["Events"],
+                "operationId": "submitEvent",
+                "parameters": [{"name": "event_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                "requestBody": {"required": True, "content": {"application/json": {"schema": {
+                    "type": "object",
+                    "required": ["roomId", "reservationDate"],
+                    "properties": {
+                        "roomId": {"type": "string"},
+                        "reservationDate": {"type": "string", "example": "2026-10-01T10:00:00.000Z"},
+                    },
+                    "additionalProperties": True,
+                }}}},
+                "responses": {
+                    "200": {"description": "Evento enviado; corpo {eventId}"},
+                    "400": {"description": "Faltou roomId/reservationDate ou data inválida"},
+                    "409": {"description": "Sala ocupada por outro evento; nada foi gravado"},
+                    "500": {"description": "Evento não gravou; a reserva criada foi desfeita"},
+                },
+            }
+
         if method == 'GET':
             return {
                 "summary": "Obter todos os eventos",

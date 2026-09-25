@@ -88,6 +88,30 @@ class FlowController:
             return jsonify({'error': f'Invalid data format: {str(e)}'}), 400
 
 
+    @staticmethod
+    def reserve_for_event(event_id: str, room_id: str, reservation_date_str: str):
+        """
+        Reserva a sala para o envio do evento (POST /events/<id>/submit).
+
+        Se o próprio evento já tem reserva ativa nessa sala e horário (tentativa
+        anterior que falhou depois de reservar), reaproveita e devolve None: não
+        é conflito e não deve ser desfeita. Senão cria e devolve a reserva nova.
+
+        Raises:
+            ValueError: data fora do formato ISO com 'Z'.
+            ReservationConflict: horário ocupado por outro evento.
+        """
+        start = datetime.strptime(reservation_date_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+        end = start + timedelta(hours=3)
+        manager = ReservationManager()
+        if manager.find_active_reservation(event_id, room_id, start):
+            return None
+        return manager.insert_reservation(room_id, event_id, start.date(), start.time(), end.time())
+
+    @staticmethod
+    def undo_reservation(reservation):
+        ReservationManager().delete_reservation(reservation["_id"])
+
     def filter_reservation_by_date(date: str):
         try:
             # Extracting date
