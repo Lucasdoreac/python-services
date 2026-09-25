@@ -12,7 +12,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false  # o CI não faz push; o token não fica no disco
 
       - name: Imagem (Dockerfile de produção)
         run: docker build -t reservas-api-tests .
