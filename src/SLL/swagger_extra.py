@@ -106,4 +106,27 @@ SPECS = {
         [{"in": "query", "name": "eventId", "type": "string", "required": True}],
         {"200": {"description": "Enviado (ou HTML em dry-run)"}, "400": {"description": "Faltou eventId"},
          "500": {"description": "Falha no envio"}}),
+    ("/send-email", "POST", None): _spec(
+        "Email", "Disparar e-mail transacional",
+        "Dispara e-mail via Brevo ou simula em dry-run. Protegido por X-API-Key (CLOUD_FUNCTION_API_KEY).",
+        [
+            {"in": "header", "name": "X-API-Key", "type": "string", "required": True, "description": "Chave de autenticação da cloud function"},
+            {"in": "body", "name": "email", "required": True, "schema": {
+                "type": "object",
+                "required": ["to", "subject", "content"],
+                "properties": {
+                    "to": {"type": "array", "items": {"type": "string"}, "description": "Destinatário(s)"},
+                    "subject": {"type": "string", "description": "Assunto"},
+                    "content": {"type": "string", "description": "Corpo do e-mail (HTML ou texto)"},
+                    "is_html": {"type": "boolean", "default": True, "description": "Se o corpo é HTML"}
+                }
+            }}
+        ],
+        {"200": {"description": "E-mail enviado ou simulado"}, "400": {"description": "Parâmetros inválidos"},
+         "401": {"description": "Chave de API inválida ou ausente"}, "502": {"description": "Erro no provedor de e-mail"}}),
+    ("/events/<event_id>/pdf", "GET", None): _spec(
+        "Events", "Download do PDF da reserva do evento",
+        "Retorna o PDF gerado da reserva do evento armazenado diretamente no banco de dados.",
+        [{"in": "path", "name": "event_id", "type": "string", "required": True, "description": "ID do evento"}],
+        {"200": {"description": "Arquivo PDF da reserva"}, "404": {"description": "PDF não encontrado"}}),
 }

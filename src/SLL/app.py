@@ -36,6 +36,7 @@ def create_app(config_class):
     from .resource_routes import resources_bp
     from .administration_approval import templates_bp
     from .offers_admin_routes import offers_admin_bp
+    from .email_routes import email_bp
     
     # Blueprints register
     app.register_blueprint(auth_bp)
@@ -45,6 +46,7 @@ def create_app(config_class):
     app.register_blueprint(offers_admin_bp)
     app.register_blueprint(resources_bp)
     app.register_blueprint(templates_bp)
+    app.register_blueprint(email_bp)
 
     # Health check
     @app.route('/health', methods=['GET'])

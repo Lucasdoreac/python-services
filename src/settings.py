@@ -34,6 +34,9 @@ class EmailSettings(BaseSettings):
     email_recipients_reitoria: Annotated[list[str], NoDecode] = []
     cloud_function_url: str | None = None
     cloud_function_api_key: str | None = None
+    brevo_api_key: str | None = None
+    brevo_sender_email: str = "noreply@udf.edu.br"
+    brevo_sender_name: str = "LabTech Reservas UDF"
     # front do Reservas: link "editar o evento" no e-mail de pedido de mudança
     frontend_url: str = "http://localhost:3000"
 
@@ -44,7 +47,7 @@ class EmailSettings(BaseSettings):
             return [item.strip() for item in value.split(",") if item.strip()]
         return value
 
-    @field_validator("cloud_function_url", "cloud_function_api_key", mode="before")
+    @field_validator("cloud_function_url", "cloud_function_api_key", "brevo_api_key", mode="before")
     @classmethod
     def _empty_is_none(cls, value):
         # `CLOUD_FUNCTION_URL=` (vazio) no .env deve valer "não definida".
