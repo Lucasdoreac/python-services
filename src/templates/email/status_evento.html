@@ -17,15 +17,18 @@
             border: 1px solid #ddd;
             padding: 20px;
             text-align: center;
+            border-radius: 8px;
         }
         .header {
             background: #0D5580;
             color: #fff;
-            padding: 10px;
+            padding: 15px;
             margin: -20px -20px 20px;
+            border-radius: 8px 8px 0 0;
         }
         .header h1 {
             margin: 0;
+            font-size: 22px;
         }
         .icon {
             margin: 20px 0;
@@ -36,6 +39,17 @@
         .action-info {
             font-size: 16px;
             margin: 10px 0;
+        }
+        .btn-pdf {
+            display: inline-block;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: bold;
+            text-decoration: none;
+            border-radius: 6px;
+            background-color: #0D5580;
+            color: #ffffff !important;
+            vertical-align: middle;
         }
     </style>
 </head>
@@ -77,18 +91,31 @@
         <!-- Conditional status icon (approved or denied) -->
         <div class="icon">
             {% if is_approved %}
-                <img src="{{ approved_icon_url }}" alt="Approved" width="120" />
+                {% if approved_icon_url %}
+                    <img src="{{ approved_icon_url }}" alt="Approved" width="100" />
+                {% else %}
+                    <span style="font-size: 48px; color: #28a745;">✔</span>
+                {% endif %}
             {% else %}
-                <img src="{{ denied_icon_url }}" alt="Denied" width="120" />
+                {% if denied_icon_url %}
+                    <img src="{{ denied_icon_url }}" alt="Denied" width="100" />
+                {% else %}
+                    <span style="font-size: 48px; color: #dc3545;">✖</span>
+                {% endif %}
             {% endif %}
         </div>
 
-        <!-- PDF icon (always shown) -->
+        <!-- PDF button (shown if pdf_link present) -->
+        {% if pdf_link %}
         <div class="pdf-icon">
-            <a href="{{ pdf_link }}" target="_blank">
-                <img src="{{ pdf_icon_url }}" alt="PDF Icon" width="70" />
+            <a class="btn-pdf" href="{{ pdf_link }}" target="_blank">
+                {% if pdf_icon_url %}
+                    <img src="{{ pdf_icon_url }}" alt="PDF" width="20" style="vertical-align: middle; margin-right: 6px;" />
+                {% endif %}
+                📄 Ver Detalhes / Reserva (PDF)
             </a>
         </div>
+        {% endif %}
     </div>
 </body>
 </html>

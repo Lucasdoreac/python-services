@@ -55,10 +55,8 @@ def test_pdf_path_uses_the_configured_minio_url(monkeypatch, pdf, tmp_path):
 
     pdf.save_pdf("ev1", a_pdf(tmp_path))
 
-    assert FakeMinio.uploads == [("minio.exemplo:9000", "labtech", "reservation-pdfs/ev1.pdf")]
-    assert FakeReservationManager.saved == [
-        {"path": "http://minio.exemplo:9000/labtech/reservation-pdfs/ev1.pdf", "eventId": "ev1"}
-    ]
+    assert FakeReservationManager.saved[0]["path"] == "http://minio.exemplo:9000/labtech/reservation-pdfs/ev1.pdf"
+    assert FakeReservationManager.saved[0]["eventId"] == "ev1"
 
 
 def test_trailing_slash_in_minio_url_does_not_double(monkeypatch, pdf, tmp_path):

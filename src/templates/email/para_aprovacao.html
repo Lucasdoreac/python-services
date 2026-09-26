@@ -17,23 +17,44 @@
             border: 1px solid #ddd;
             padding: 20px;
             text-align: center;
+            border-radius: 8px;
         }
         .header {
             background: #0D5580;
             color: #fff;
-            padding: 10px;
+            padding: 15px;
             margin: -20px -20px 20px;
+            border-radius: 8px 8px 0 0;
         }
         .header h1 {
             margin: 0;
+            font-size: 22px;
         }
-        .button {
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            font-size: 15px;
+            font-weight: bold;
             text-decoration: none;
-            margin: 0 5px;
-        }
-        .button img {
+            border-radius: 6px;
+            margin: 5px 8px;
+            color: #ffffff !important;
             vertical-align: middle;
-            border: none;
+        }
+        .btn-pdf {
+            background-color: #0D5580;
+            padding: 10px 20px;
+            font-size: 14px;
+        }
+        .btn-approve {
+            background-color: #28a745;
+        }
+        .btn-reject {
+            background-color: #dc3545;
+        }
+        .btn-changes {
+            background-color: #f0ad4e;
+            color: #212529 !important;
         }
         .icon {
             margin: 20px 0;
@@ -46,31 +67,45 @@
             <h1>Evento para Aprovação</h1>
         </div>
         <h2>Olá {{ user_type }}</h2>
-        <p>O evento com os dados abaixo:</p>
+        <p>O evento com os dados abaixo foi submetido para avaliação:</p>
 
-        <!-- PDF icon -->
+        <!-- PDF icon / button -->
+        {% if pdf_link %}
         <div class="icon">
-            <a href="{{ pdf_link }}" target="_blank">
-                <img src="{{ pdf_icon_url }}" alt="PDF Icon" width="70" />
+            <a class="btn btn-pdf" href="{{ pdf_link }}" target="_blank">
+                {% if pdf_icon_url %}
+                    <img src="{{ pdf_icon_url }}" alt="PDF" width="20" style="vertical-align: middle; margin-right: 6px;" />
+                {% endif %}
+                📄 Ver Detalhes / Reserva (PDF)
             </a>
         </div>
+        {% endif %}
 
         <!-- Request Changes button (optional) -->
         {% if request_changes_link %}
-            <p>
-                <a class="button" href="{{ request_changes_link }}">
-                    <img src="{{ request_changes_icon_url }}" alt="Requisitar edição" width="150" />
+            <p style="margin: 20px 0;">
+                <a class="btn btn-changes" href="{{ request_changes_link }}">
+                    {% if request_changes_icon_url %}
+                        <img src="{{ request_changes_icon_url }}" alt="Editar" width="20" style="vertical-align: middle; margin-right: 6px;" />
+                    {% endif %}
+                    ✏️ Solicitar Alterações
                 </a>
             </p>
         {% endif %}
 
         <!-- Reject and Approve buttons -->
-        <p>
-            <a class="button" href="{{ reject_link }}">
-                <img src="{{ reject_icon_url }}" alt="Rejected" width="120" />
+        <p style="margin: 25px 0;">
+            <a class="btn btn-reject" href="{{ reject_link }}">
+                {% if reject_icon_url %}
+                    <img src="{{ reject_icon_url }}" alt="Recusar" width="20" style="vertical-align: middle; margin-right: 6px;" />
+                {% endif %}
+                ✖ Recusar
             </a>
-            <a class="button" href="{{ approve_link }}">
-                <img src="{{ approve_icon_url }}" alt="Approved" width="120" />
+            <a class="btn btn-approve" href="{{ approve_link }}">
+                {% if approve_icon_url %}
+                    <img src="{{ approve_icon_url }}" alt="Aprovar" width="20" style="vertical-align: middle; margin-right: 6px;" />
+                {% endif %}
+                ✔ Aprovar
             </a>
         </p>
     </div>

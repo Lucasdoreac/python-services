@@ -201,7 +201,13 @@ class ReservationManager:
 
     def insert_pdf(self, pdf_data):
         try:
-            existing = self.pdfs_collection.find_one({"path": pdf_data.get("path")})
+            query = {}
+            if pdf_data.get("eventId"):
+                query = {"eventId": str(pdf_data.get("eventId"))}
+            elif pdf_data.get("path"):
+                query = {"path": pdf_data.get("path")}
+
+            existing = self.pdfs_collection.find_one(query) if query else None
 
             if existing:
                 self.pdfs_collection.replace_one({"_id": existing["_id"]}, pdf_data)
@@ -212,6 +218,9 @@ class ReservationManager:
 
         except Exception as e:
             raise e
+
+    def get_pdf_by_event_id(self, event_id):
+        return self.pdfs_collection.find_one({"eventId": str(event_id)})
 
     def insert_send_email(self,token,step,eventId):
         document = {

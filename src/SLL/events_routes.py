@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request, make_response
+from flask import Blueprint, jsonify, request, make_response, Response
 from flasgger import swag_from
 
 from utils.enums import EventStatus
@@ -192,3 +192,23 @@ class EventsRoutes:
         response.headers['Cache-Control'] = 'no-cache, no-store'
         response.headers['Pragma'] = 'no-cache'
         return response
+
+    @staticmethod
+    @events_bp.route('/events/<event_id>/pdf', methods=['GET'])
+    @swag_from(get_swagger_specification('/events/<event_id>/pdf', 'GET'))
+    def get_event_pdf(event_id):
+        """Entrega o PDF gerado da reserva do evento."""
+        from DAL import ReservationManager
+        rm = ReservationManager()
+        doc = rm.get_pdf_by_event_id(event_id)
+        if not doc or not doc.get("content"):
+            return jsonify({"error": "PDF não encontrado para este evento"}), 404
+
+        return Response(
+            doc["content"],
+            mimetype="application/pdf",
+            headers={
+                "Content-Disposition": f"inline; filename={event_id}.pdf",
+                "Cache-Control": "public, max-age=3600"
+            }
+        )

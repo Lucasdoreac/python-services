@@ -287,50 +287,50 @@ def generate_event_pdf(event_id,data: Dict[str, Any] = None):
 
 
 def save_pdf(event_id, local_pdf_path):
-    # MINIO_URL com esquema (http://host:porta) é o endereço público do PDF,
-    # o mesmo que os e-mails usam; o client do MinIO quer só host:porta.
-    public_url = f"{os.getenv('MINIO_URL')}".rstrip('/')
-    MINIO_URL = public_url.split('//', 1)[1] if '//' in public_url else public_url
-    ACCESS_KEY = f"{os.getenv('MINIO_ACCESS_KEY')}"
-    SECRET_KEY = f"{os.getenv('MINIO_SECRET_KEY')}"
+    with open(local_pdf_path, "rb") as f:
+        pdf_bytes = f.read()
 
-    client = Minio(
-        MINIO_URL,
-        access_key=ACCESS_KEY,
-        secret_key=SECRET_KEY,
-        secure=False  # Set to True if using HTTPS
-    )
+    reservation_manager = ReservationManager()
+    raw_minio_url = (os.getenv("MINIO_URL") or "").strip()
 
-    try:
-        # Bucket name
-        bucket_name = "labtech"
+    pdf_data = {
+        "eventId": str(event_id),
+        "content": pdf_bytes,
+        "filename": f"{event_id}.pdf",
+        "contentType": "application/pdf",
+        "path": f"/events/{event_id}/pdf",
+    }
 
-        # Create bucket if it doesn't exist (optional)
-        if not client.bucket_exists(bucket_name):
-            client.make_bucket(bucket_name)
+    if raw_minio_url:
+        public_url = raw_minio_url.rstrip("/")
+        minio_endpoint = public_url.split("//", 1)[1] if "//" in public_url else public_url
+        access_key = f"{os.getenv('MINIO_ACCESS_KEY') or ''}"
+        secret_key = f"{os.getenv('MINIO_SECRET_KEY') or ''}"
 
-        object_name = f"reservation-pdfs/{event_id}.pdf"  # Object key in bucket
+        try:
+            client = Minio(
+                minio_endpoint,
+                access_key=access_key,
+                secret_key=secret_key,
+                secure=False,
+            )
+            bucket_name = "labtech"
+            if not client.bucket_exists(bucket_name):
+                client.make_bucket(bucket_name)
 
-        # Upload the file
-        client.fput_object(
-            bucket_name,
-            object_name,
-            local_pdf_path,
-            content_type="application/pdf"
-        )
+            object_name = f"reservation-pdfs/{event_id}.pdf"
+            client.fput_object(
+                bucket_name,
+                object_name,
+                local_pdf_path,
+                content_type="application/pdf",
+            )
+            pdf_data["path"] = f"{public_url}/{bucket_name}/{object_name}"
+            print(f"Successfully uploaded {local_pdf_path} to {bucket_name}/{object_name}.")
+        except Exception as exc:
+            print("MinIO upload skipped/failed:", exc)
 
-        pdf_data ={
-            "path": f"{public_url}/{bucket_name}/{object_name}",
-            "eventId": event_id,
-        }
-
-        reservation_manager = ReservationManager()
-        reservation_manager.insert_pdf(pdf_data)
-
-        print(f"Successfully uploaded {local_pdf_path} to {bucket_name}/{object_name}.")
-
-    except S3Error as exc:
-        print("Error occurred:", exc)
+    reservation_manager.insert_pdf(pdf_data)
 
 
 def resolve_jsonlist(event_data, errormsg):
