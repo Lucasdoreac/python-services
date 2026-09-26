@@ -21,4 +21,4 @@ RUN poetry install --no-root
 
 EXPOSE 5000
 
-CMD ["sh", "-c", "PYTHONPATH=src poetry run gunicorn -w 2 -b 0.0.0.0:5000 main:reservation_app"]
+CMD ["sh", "-c", "PYTHONPATH=src poetry run gunicorn -w 2 -b 0.0.0.0:${PORT:-5000} main:reservation_app"]

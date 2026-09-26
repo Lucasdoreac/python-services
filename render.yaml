@@ -1,0 +1,147 @@
+# Blueprint do Render para o sistema Reservas UDF (LabTech)
+# Hospedagem 100% gratuita usando Free Tier do Render (Web Services Docker + Static Site)
+services:
+  # 1. Frontend SPA (Vite + React)
+  - type: web
+    name: reservas-web
+    runtime: static
+    repo: https://github.com/Lucasdoreac/interfaces-usuario
+    branch: main
+    rootDir: reservas
+    buildCommand: npm install && npm run build
+    staticPublishPath: build
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: REACT_APP_API_BASE_URL
+        fromService:
+          type: web
+          name: reservas-api
+          property: url
+
+  # 2. Catálogo Acadêmico (internal_apis)
+  - type: web
+    name: reservas-catalog
+    runtime: docker
+    repo: https://github.com/Lucasdoreac/shared-resources
+    branch: main
+    dockerContext: internal_apis
+    dockerfilePath: internal_apis/Dockerfile
+    plan: free
+    envVars:
+      - key: MONGO_URI
+        sync: false
+      - key: MONGO_DATABASE
+        value: rooms-reservation-app
+      - key: API_KEY_LIST
+        generateValue: true
+      - key: REDIS_URL
+        sync: false
+
+  # 3. Serviço de Autenticação / Magic Link (auth_service)
+  - type: web
+    name: reservas-auth
+    runtime: docker
+    repo: https://github.com/Lucasdoreac/shared-resources
+    branch: main
+    dockerContext: auth_service
+    dockerfilePath: auth_service/Dockerfile
+    plan: free
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: AUTH_DEV_RETURN_LINK
+        value: "false"
+      - key: MONGO_URI
+        sync: false
+      - key: MONGO_DATABASE
+        value: rooms-reservation-app
+      - key: REACT_APP
+        fromService:
+          type: web
+          name: reservas-web
+          property: url
+      - key: CLOUD_FUNCTION_URL
+        fromService:
+          type: web
+          name: reservas-api
+          property: url
+      - key: CLOUD_FUNCTION_API_KEY
+        generateValue: true
+      - key: REDIS_URL
+        sync: false
+
+  # 4. API Principal de Reservas e E-mails (python-services)
+  - type: web
+    name: reservas-api
+    runtime: docker
+    repo: https://github.com/Lucasdoreac/python-services
+    branch: main
+    plan: free
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: MONGO_URI
+        sync: false
+      - key: MONGO_DATABASE
+        value: rooms-reservation-app
+      - key: URL_AUTH
+        fromService:
+          type: web
+          name: reservas-auth
+          property: url
+      - key: URL_graph
+        fromService:
+          type: web
+          name: reservas-catalog
+          property: url
+          path: /graphql/
+      - key: URL_restapi
+        fromService:
+          type: web
+          name: reservas-catalog
+          property: url
+          path: /restapi
+      - key: INTERNAL_API_KEY
+        fromService:
+          type: web
+          name: reservas-catalog
+          envVarKey: API_KEY_LIST
+      - key: SERVER_NAME
+        fromService:
+          type: web
+          name: reservas-api
+          property: host
+      - key: SERVER_SCHEME
+        value: https
+      - key: FRONTEND_URL
+        fromService:
+          type: web
+          name: reservas-web
+          property: url
+      - key: EMAIL_DRY_RUN
+        value: "false"
+      - key: EMAIL_RECIPIENTS_COORDENACAO
+        sync: false
+      - key: EMAIL_RECIPIENTS_REITORIA
+        sync: false
+      - key: CLOUD_FUNCTION_URL
+        fromService:
+          type: web
+          name: reservas-api
+          property: url
+      - key: CLOUD_FUNCTION_API_KEY
+        fromService:
+          type: web
+          name: reservas-auth
+          envVarKey: CLOUD_FUNCTION_API_KEY
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_SENDER_EMAIL
+        sync: false
+      - key: BREVO_SENDER_NAME
+        value: LabTech Reservas UDF
+      - key: OFFER_ADMIN_EMAILS
+        sync: false
