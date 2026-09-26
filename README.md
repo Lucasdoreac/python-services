@@ -39,3 +39,31 @@ https://www.jetbrains.com/help/pycharm/poetry.html#poetry-env
 ```bash
 poetry install
 ```
+
+## Deploy no Render (Blueprint render.yaml)
+
+O repositório possui o arquivo [`render.yaml`](./render.yaml) configurado para implantar toda a infraestrutura da aplicação (4 serviços web interligados) usando a hospedagem gratuita (Free Tier) do Render.
+
+### Serviços criados pelo Blueprint:
+1. **`reservas-web`**: Frontend SPA (React / Vite) compilado como site estático.
+2. **`reservas-catalog`**: Catálogo Acadêmico (`internal_apis`), executado via Docker.
+3. **`reservas-auth`**: Serviço de Autenticação / Magic Link (`auth_service`), executado via Docker.
+4. **`reservas-api`**: API Principal de Reservas e E-mails (`python-services`), executado via Docker.
+
+### Passo a Passo para Implantação:
+1. **Acesse o Dashboard do Render**:
+   - Faça login na conta do Render ([render.com](https://render.com)).
+2. **Criar Blueprint**:
+   - Clique em **New +** e selecione **Blueprint**.
+   - Conecte o repositório GitHub contendo o arquivo `render.yaml`.
+3. **Configurar Variáveis de Ambiente pendentes (`sync: false`)**:
+   Durante a criação do Blueprint, o Render solicitará o preenchimento das variáveis marcadas com `sync: false`:
+   - `MONGO_URI`: String de conexão com o MongoDB (ex.: MongoDB Atlas `mongodb+srv://...`).
+   - `BREVO_API_KEY`: Chave de API do Brevo para envio de e-mails.
+   - `BREVO_SENDER_EMAIL`: E-mail remetente cadastrado no Brevo.
+   - `EMAIL_RECIPIENTS_COORDENACAO`: E-mails da coordenação (separados por vírgula).
+   - `EMAIL_RECIPIENTS_REITORIA`: E-mails da reitoria (separados por vírgula).
+   - `REDIS_URL` (opcional / se utilizado nos microserviços).
+   - `OFFER_ADMIN_EMAILS` (opcional).
+4. **Finalizar a Implantação**:
+   - Clique em **Apply**. O Render iniciará a criação e orquestração automática de todos os 4 serviços interligados.
