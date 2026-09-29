@@ -143,7 +143,7 @@ class FlowController:
         :return: Lista de objetos campus com id e name.
         """
         try:
-            url = f"{os.getenv('URL_restapi')}/campus"
+            url = f"{os.getenv('URL_restapi')}/campus/"
             response = RestApiRequestMethods.get_request_simple(url)
             if response.status_code != 200:
                 raise Exception("Erro ao buscar campus do shared-resources")
@@ -163,7 +163,7 @@ class FlowController:
         :return:
         """
         try:
-            url = f"{os.getenv('URL_restapi')}/rooms?room_id={room_id}"
+            url = f"{os.getenv('URL_restapi')}/rooms/?room_id={room_id}"
             response = RestApiRequestMethods.get_request_simple(url)
             if response.status_code != 200:
                 raise Exception("Erro ao buscar sala do shared-resources")
@@ -176,7 +176,7 @@ class FlowController:
             Busca todas as salas cadastradas no shared-resources, utilizando paginação
             e opcionalmente filtrando por nome.
         """
-        url = RestApiRequestMethods.generate_url("/rooms")
+        url = RestApiRequestMethods.generate_url("rooms/")
 
         # Adiciona o parâmetro room_name à requisição se estiver presente
         params = {"page": page, "page_size": page_size}
@@ -198,7 +198,7 @@ class FlowController:
         :return:
         """
         try:
-            url = f"{os.getenv('URL_restapi')}/campus?campus_id={campus_id}"
+            url = f"{os.getenv('URL_restapi')}/campus/?campus_id={campus_id}"
             response = RestApiRequestMethods.get_request_simple(url)
             if response.status_code != 200:
                 raise Exception("Erro ao buscar campus do shared-resources")
