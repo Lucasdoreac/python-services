@@ -109,6 +109,12 @@ def notify_reservation():
         else:
             # Em produção, envia o email e retorna status
             response = send_reservation_info_to_reitoria(event_id)
+            if hasattr(response, 'status_code') and response.status_code == 202:
+                return jsonify({
+                    'success': True,
+                    'sent': False,
+                    'message': 'Email dry-run; mensagem não enviada'
+                }), 202
             if hasattr(response, 'status_code') and response.status_code == 200:
                 return jsonify({'success': True, 'message': 'Email enviado com sucesso para a reitoria'}), 200
             else:

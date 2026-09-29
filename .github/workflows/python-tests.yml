@@ -29,3 +29,5 @@ jobs:
         env:
           PYTHONPATH: src
         run: poetry run pytest -q
+      - name: Build the Render amd64 image
+        run: docker build --pull --platform linux/amd64 --tag reservas-api:ci .

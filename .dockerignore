@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+.idea
+.vscode
+.venv
+__pycache__
+**/__pycache__
+*.py[cod]
+*.log
+.pytest_cache
+.mypy_cache
+.coverage
