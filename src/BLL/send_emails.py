@@ -2,13 +2,13 @@ import os
 from datetime import datetime
 from hashlib import sha256
 from DAL.collections_repositories import SendEmailrepository
-import requests
 from flask import render_template, current_app, url_for
 from DAL import ReservationManager
 from SLL import AppLogger, Logmessage, LogType
 from SLL.cluster_api.request_methods import GraphQlRequestMethods
 from .index import events_repository, FlowController
 from utils.enums import EmailStep, EventStatus
+from SLL.email_service import dry_run_response, is_email_dry_run, send_email
 
 
 if os.getenv("FLASK_ENV") == "development":
@@ -34,6 +34,8 @@ def send_to_coordenacao(event_id):
     Returns:
         Response: HTTP response from the email sending service.
     """
+    if is_email_dry_run() and os.getenv("FLASK_ENV") != "development":
+        return dry_run_response()
     #crair email token de uso UNICO(so desativa token quando a acao for tomada ex: approve,rejected or requested change)
     tokenId = create_send_email_token(event_id, step=EmailStep.COORDENACAO)
     # MinIO icon URLs (adjust paths as needed)
@@ -71,21 +73,14 @@ def send_to_coordenacao(event_id):
         return html_content
 
     # Prepare the email payload
-    url = f"{os.getenv('CLOUD_FUNCTION_URL')}/send-email"
     payload = {
         'subject': 'Evento para Aprovação - Coordenação',
         'content': html_content,
         'to': ", ".join(emails["coordenacao"]),
         'is_html': True
     }
-    headers = {
-        'X-API-Key': os.getenv('CLOUD_FUNCTION_API_KEY'),
-        'Content-Type': 'application/json'
-    }
-
     AppLogger.log(Logmessage.SENDING_EMAIL, LogType.INFO, email=emails["coordenacao"], event=event_id, token=tokenId)
-    # Send the request to your cloud function
-    return requests.post(url, json=payload, headers=headers)
+    return send_email(payload)
 
 def send_to_reitoria(event_id):
     """
@@ -98,6 +93,8 @@ def send_to_reitoria(event_id):
     Returns:
         Response: HTTP response from the email sending service.
     """
+    if is_email_dry_run() and os.getenv("FLASK_ENV") != "development":
+        return dry_run_response()
     # crair email token de uso UNICO(so desativa token quando a acao for tomada ex: approve,rejected or requested change)
     tokenId = create_send_email_token(event_id, step=EmailStep.REITORIA)
 
@@ -131,22 +128,14 @@ def send_to_reitoria(event_id):
         return html_content
 
     # Prepare the email payload
-    url = f"{os.getenv('CLOUD_FUNCTION_URL')}/send-email"
     payload = {
         'subject': 'Evento para Aprovação - Reitoria',
         'content': html_content,
         'to': ", ".join(emails["reitoria"]),
         'is_html': True
     }
-    headers = {
-        'X-API-Key': os.getenv('CLOUD_FUNCTION_API_KEY'),
-        'Content-Type': 'application/json'
-    }
-
     AppLogger.log(Logmessage.SENDING_EMAIL, LogType.INFO, email=emails["reitoria"], event=event_id, token=tokenId)
-    # Send the request to your cloud function
-    response = requests.post(url, json=payload, headers=headers)
-    return response
+    return send_email(payload)
 
 
 def send_reservation_info_to_reitoria(event_id, reservation_date=None, classification=None):
@@ -161,6 +150,8 @@ def send_reservation_info_to_reitoria(event_id, reservation_date=None, classific
     Returns:
         Response: HTTP response from the email sending service.
     """
+    if is_email_dry_run() and os.getenv("FLASK_ENV") != "development":
+        return dry_run_response()
     # 1. Fetch event data
     event = FlowController.find_event_by_event_id(event_id)
     if not event:
@@ -224,18 +215,12 @@ def send_reservation_info_to_reitoria(event_id, reservation_date=None, classific
         return html_content
 
     # 9. Prepare and send email
-    url = f"{os.getenv('CLOUD_FUNCTION_URL')}/send-email"
     payload = {
         'subject': 'Nova Reserva Criada',
         'content': html_content,
         'to': ", ".join(emails["reitoria"]),
         'is_html': True
     }
-    headers = {
-        'X-API-Key': os.getenv('CLOUD_FUNCTION_API_KEY'),
-        'Content-Type': 'application/json'
-    }
-
     AppLogger.log(
         Logmessage.SENDING_EMAIL,
         LogType.INFO,
@@ -244,7 +229,7 @@ def send_reservation_info_to_reitoria(event_id, reservation_date=None, classific
         message="Notification of new reservation"
     )
 
-    return requests.post(url, json=payload, headers=headers)
+    return send_email(payload)
 
 def send_event_status(event_id, is_approved: bool, who: str, token:str):
     """
@@ -312,21 +297,13 @@ def send_event_status(event_id, is_approved: bool, who: str, token:str):
     subject = "Evento Aprovado" if is_approved else "Evento Não Aprovado"
 
     # Prepare the email payload
-    url = f"{os.getenv('CLOUD_FUNCTION_URL')}/send-email"
     payload = {
         'subject': subject,
         'content': html_content,
         'to': [email],
         'is_html': True
     }
-    headers = {
-        'X-API-Key': os.getenv('CLOUD_FUNCTION_API_KEY'),
-        'Content-Type': 'application/json'
-    }
-
-    # Send the request to your cloud function
-    response = requests.post(url, json=payload, headers=headers)
-    return response
+    return send_email(payload)
 
 def verify_token_from_email(tokenId) -> bool:
     data = send_email_repository.get_send_email_by_token_id(tokenId)
