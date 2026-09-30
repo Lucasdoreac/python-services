@@ -1,16 +1,16 @@
 import pytest
 from mongomock import MongoClient
 
-from configmodule import get_config
+import configmodule
 from SLL import create_app
 
 
 @pytest.fixture
 def app(monkeypatch):
     monkeypatch.setattr("pymongo.MongoClient", MongoClient)
-    monkeypatch.setenv("MONGO_URI", "mongodb://localhost:27017")
-    monkeypatch.setenv("MONGO_DATABASE", "labtech_test")
-    app = create_app(get_config())
+    monkeypatch.setattr(configmodule.Config, "MONGO_URI", "mongodb://localhost:27017")
+    monkeypatch.setattr(configmodule.Config, "MONGO_DATABASE", "labtech_test")
+    app = create_app(configmodule.get_config())
     yield app
 
 

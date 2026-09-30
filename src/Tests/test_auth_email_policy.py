@@ -3,7 +3,6 @@ from unittest.mock import Mock
 from flask import Response
 from mongomock import MongoClient
 
-from configmodule import get_config
 from SLL.email_policy import is_email_allowed
 
 
@@ -28,9 +27,12 @@ def test_rejects_malformed_email():
 
 def test_auth_route_forwards_an_explicitly_allowed_developer_email(monkeypatch):
     monkeypatch.setattr("pymongo.MongoClient", MongoClient)
+    import configmodule
     from SLL import create_app
 
-    app = create_app(get_config())
+    monkeypatch.setattr(configmodule.Config, "MONGO_URI", "mongodb://localhost:27017")
+    monkeypatch.setattr(configmodule.Config, "MONGO_DATABASE", "labtech_test")
+    app = create_app(configmodule.get_config())
     from SLL.auth_routes import AuthRoutes
 
     insert_token = Mock(return_value=Response("accepted", status=202))
