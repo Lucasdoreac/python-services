@@ -23,6 +23,22 @@ else:
         "reservas": ["bruno.silva@udf.edu.br"]
     }
 
+
+def _pdf_link(event_id):
+    """Link público do PDF, usando MinIO quando configurado e a API caso contrário."""
+    minio_url = (os.getenv("MINIO_URL") or "").strip().rstrip("/")
+    if minio_url:
+        return f"{minio_url}/labtech/reservation-pdfs/{event_id}.pdf"
+
+    scheme = os.getenv("SERVER_SCHEME", "http")
+    server_name = os.getenv("SERVER_NAME", "localhost:5000")
+    return f"{scheme}://{server_name}/events/{event_id}/pdf"
+
+
+def _icon_url(name):
+    minio_url = (os.getenv("MINIO_URL") or "").strip().rstrip("/")
+    return f"{minio_url}/labtech/email-icones/{name}" if minio_url else ""
+
 def send_to_coordenacao(event_id):
     """
     Sends an email to Coordenação for event approval.
@@ -39,11 +55,11 @@ def send_to_coordenacao(event_id):
     #crair email token de uso UNICO(so desativa token quando a acao for tomada ex: approve,rejected or requested change)
     tokenId = create_send_email_token(event_id, step=EmailStep.COORDENACAO)
     # MinIO icon URLs (adjust paths as needed)
-    pdf_link = f"{os.getenv('MINIO_URL')}/labtech/reservation-pdfs/{event_id}.pdf"
-    pdf_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/pdf.png"
-    request_changes_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/request-changes.png"
-    approve_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/approve.png"
-    reject_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/reject.png"
+    pdf_link = _pdf_link(event_id)
+    pdf_icon_url = _icon_url("pdf.png")
+    request_changes_icon_url = _icon_url("request-changes.png")
+    approve_icon_url = _icon_url("approve.png")
+    reject_icon_url = _icon_url("reject.png")
 
     # Example links (adjust to your routes)
     with current_app.test_request_context():
@@ -99,10 +115,10 @@ def send_to_reitoria(event_id):
     tokenId = create_send_email_token(event_id, step=EmailStep.REITORIA)
 
     # MinIO icon URLs (adjust paths as needed)
-    pdf_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/pdf.png"
-    request_changes_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/request-changes.png"
-    approve_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/approve.png"
-    reject_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/reject.png"
+    pdf_icon_url = _icon_url("pdf.png")
+    request_changes_icon_url = _icon_url("request-changes.png")
+    approve_icon_url = _icon_url("approve.png")
+    reject_icon_url = _icon_url("reject.png")
 
     # Example links (adjust to your routes)
     # Maybe Reitoria doesn't need a 'request changes' link. You can omit or include it as needed.
@@ -115,7 +131,7 @@ def send_to_reitoria(event_id):
     html_content = render_template(
         "email/para_aprovacao.html",
         user_type="Reitoria",
-        pdf_link=f"{os.getenv('MINIO_URL')}/labtech/reservation-pdfs/{event_id}.pdf",
+        pdf_link=_pdf_link(event_id),
         pdf_icon_url=pdf_icon_url,
         request_changes_icon_url=request_changes_icon_url,
         approve_icon_url=approve_icon_url,
@@ -275,16 +291,16 @@ def send_event_status(event_id, is_approved: bool, who: str, token:str):
     reservation_manager = ReservationManager()
     reservation_manager.update_event(event_id, event_data=event)
     # MinIO icon URLs (adjust paths if needed)
-    pdf_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/pdf.png"
-    approved_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/approved.png"
-    denied_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/denied.png"
+    pdf_icon_url = _icon_url("pdf.png")
+    approved_icon_url = _icon_url("approved.png")
+    denied_icon_url = _icon_url("denied.png")
 
     # Render the template with the appropriate data
     html_content = render_template(
         "email/status_evento.html",
         username=email,
         is_approved=is_approved,
-        pdf_link=f"{os.getenv('MINIO_URL')}/labtech/reservation-pdfs/{event_id}.pdf",
+        pdf_link=_pdf_link(event_id),
         pdf_icon_url=pdf_icon_url,
         approved_icon_url=approved_icon_url,
         denied_icon_url=denied_icon_url,

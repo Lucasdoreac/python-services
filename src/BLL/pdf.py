@@ -1,8 +1,9 @@
 import os
+import tempfile
 from datetime import datetime
 from typing import Dict, Any
 import typst
-from minio import Minio, S3Error
+from minio import Minio
 from BLL import FlowController
 from DAL import ReservationManager
 import json
@@ -270,71 +271,65 @@ def generate_event_pdf(event_id,data: Dict[str, Any] = None):
 )
     """
 
-    pdf_dir = os.path.join("PDFs")
-    os.makedirs(pdf_dir, exist_ok=True)
+    # Isola arquivos temporários por evento para que aprovações simultâneas
+    # não sobrescrevam o PDF umas das outras nem deixem arquivo local no serviço.
+    with tempfile.TemporaryDirectory(prefix=f"pdf-{event_id}-") as pdf_dir:
+        typst_file_path = os.path.join(pdf_dir, "evento.typ")
+        with open(typst_file_path, "w", encoding="utf-8") as typ_file:
+            typ_file.write(typst_text)
 
-    typst_file_path = os.path.join(pdf_dir, "evento.typ")
-    with open(typst_file_path, "w", encoding="utf-8") as typ_file:
-        typ_file.write(typst_text)
-    print(f"Arquivo Typst criado em: {typst_file_path}")
+        pdf_path = os.path.join(pdf_dir, "evento.pdf")
+        with open(pdf_path, "wb") as pdf_file:
+            pdf_file.write(typst.compile(typst_file_path))
 
-    pdf_bytes = typst.compile(typst_file_path)
-
-    pdf_path = os.path.join(pdf_dir, "evento.pdf")
-    with open(pdf_path, "wb") as pdf_file:
-        pdf_file.write(pdf_bytes)
-
-    print(f"PDF gerado e salvo com sucesso em: {pdf_path}")
-
-    save_pdf(event_id)
+        save_pdf(event_id, pdf_path)
 
 
-def save_pdf(event_id):
-    MINIO_URL = f"{os.getenv('MINIO_URL')}"
-    if '//' in MINIO_URL:
-        MINIO_URL = MINIO_URL.split('//', 1)[1]
-    ACCESS_KEY = f"{os.getenv('MINIO_ACCESS_KEY')}"
-    SECRET_KEY = f"{os.getenv('MINIO_SECRET_KEY')}"
+def save_pdf(event_id, local_pdf_path):
+    with open(local_pdf_path, "rb") as pdf_file:
+        pdf_bytes = pdf_file.read()
 
-    client = Minio(
-        MINIO_URL,
-        access_key=ACCESS_KEY,
-        secret_key=SECRET_KEY,
-        secure=False  # Set to True if using HTTPS
-    )
+    reservation_manager = ReservationManager()
+    raw_minio_url = (os.getenv("MINIO_URL") or "").strip()
+    pdf_data = {
+        "eventId": str(event_id),
+        "content": pdf_bytes,
+        "filename": f"{event_id}.pdf",
+        "contentType": "application/pdf",
+        "path": f"/events/{event_id}/pdf",
+    }
 
-    try:
-        # Bucket name
-        bucket_name = "labtech"
+    # O Mongo é o armazenamento padrão do PDF. Se existir MinIO, ele recebe
+    # uma cópia; falha de MinIO não impede salvar/servir o PDF pelo Mongo.
+    if raw_minio_url:
+        public_url = raw_minio_url.rstrip("/")
+        minio_endpoint = public_url.split("//", 1)[1] if "//" in public_url else public_url
+        access_key = os.getenv("MINIO_ACCESS_KEY") or ""
+        secret_key = os.getenv("MINIO_SECRET_KEY") or ""
 
-        # Create bucket if it doesn't exist (optional)
-        if not client.bucket_exists(bucket_name):
-            client.make_bucket(bucket_name)
+        try:
+            client = Minio(
+                minio_endpoint,
+                access_key=access_key,
+                secret_key=secret_key,
+                secure=public_url.startswith("https://"),
+            )
+            bucket_name = "labtech"
+            if not client.bucket_exists(bucket_name):
+                client.make_bucket(bucket_name)
 
-        # PDF file to upload
-        local_pdf_path = "PDFs/evento.pdf"
-        object_name = f"reservation-pdfs/{event_id}.pdf"  # Object key in bucket
+            object_name = f"reservation-pdfs/{event_id}.pdf"
+            client.fput_object(
+                bucket_name,
+                object_name,
+                local_pdf_path,
+                content_type="application/pdf",
+            )
+            pdf_data["path"] = f"{public_url}/{bucket_name}/{object_name}"
+        except Exception as exc:
+            print("MinIO upload failed; PDF remains stored in Mongo:", exc)
 
-        # Upload the file
-        client.fput_object(
-            bucket_name,
-            object_name,
-            local_pdf_path,
-            content_type="application/pdf"
-        )
-
-        pdf_data ={
-            "path":f"dwcorp.com.br:9000/{bucket_name}/{object_name}",
-            "eventId": event_id,
-        }
-
-        reservation_manager = ReservationManager()
-        reservation_manager.insert_pdf(pdf_data)
-
-        print(f"Successfully uploaded {local_pdf_path} to {bucket_name}/{object_name}.")
-
-    except S3Error as exc:
-        print("Error occurred:", exc)
+    reservation_manager.insert_pdf(pdf_data)
 
 
 def resolve_jsonlist(event_data, errormsg):
