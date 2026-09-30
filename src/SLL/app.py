@@ -15,12 +15,25 @@ def create_app(config_class):
     # Load MongoDB Factory
     MongoDBConnectionFactory.init_app(app.config['MONGO_URI'], app.config['MONGO_DATABASE'])
 
+    # Preserve the database-level duplicate reservation guard used in
+    # Production. Existing duplicate data can prevent index creation, so log
+    # the failure without making the whole API unavailable.
+    from DAL import ReservationManager
+    try:
+        ReservationManager.ensure_indexes()
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            "Could not create the active-reservation unique index"
+        )
+
     from .auth_routes import auth_bp
     from .reservation_routes import reservation_bp
     from .events_routes import events_bp
     from .types_routes import types_bp
     from .resource_routes import resources_bp
     from .administration_approval import templates_bp
+    from .email_routes import email_bp
     
     # Blueprints register
     app.register_blueprint(auth_bp)
@@ -29,6 +42,7 @@ def create_app(config_class):
     app.register_blueprint(types_bp)
     app.register_blueprint(resources_bp)
     app.register_blueprint(templates_bp)
+    app.register_blueprint(email_bp)
 
     # Health check
     @app.route('/health', methods=['GET'])

@@ -5,7 +5,7 @@ import requests
 
 
 def is_email_dry_run():
-    return os.getenv("EMAIL_DRY_RUN", "").strip().casefold() == "true"
+    return os.getenv("EMAIL_DRY_RUN", "true").strip().casefold() == "true"
 
 
 def dry_run_response():

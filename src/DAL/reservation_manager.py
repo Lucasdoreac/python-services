@@ -24,6 +24,21 @@ class ReservationConflict(ValueError):
 
 class ReservationManager:
 
+    @staticmethod
+    def ensure_indexes():
+        """Create the partial unique index used to reject duplicate reservations.
+
+        The overlap check in ``insert_reservation`` is not atomic across
+        concurrent requests. This index preserves the Production guard for
+        active reservations with the same room and start time.
+        """
+        MongoDBConnectionFactory.get_db().reservations.create_index(
+            [("roomId", 1), ("startAt", 1)],
+            name="uniq_active_reservation_room_start",
+            unique=True,
+            partialFilterExpression={"status": {"$in": ACTIVE_RESERVATION_STATUSES}},
+        )
+
     def __init__(self):
         self.db = MongoDBConnectionFactory.get_db()
         self.reservation_collection = self.db.reservations

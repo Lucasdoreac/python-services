@@ -9,6 +9,7 @@ from mongomock import MongoClient
 
 from configmodule import get_config
 from DAL import MongoDBConnectionFactory
+from DAL.reservation_manager import ACTIVE_RESERVATION_STATUSES
 from SLL import create_app
 
 
@@ -82,6 +83,17 @@ def reservations(event_id):
     return list(
         MongoDBConnectionFactory.get_db().reservations.find({"eventId": event_id})
     )
+
+
+def test_app_creates_partial_unique_index_for_active_reservations(client):
+    indexes = MongoDBConnectionFactory.get_db().reservations.index_information()
+
+    index = indexes["uniq_active_reservation_room_start"]
+    assert index["key"] == [("roomId", 1), ("startAt", 1)]
+    assert index["unique"] is True
+    assert index["partialFilterExpression"] == {
+        "status": {"$in": ACTIVE_RESERVATION_STATUSES}
+    }
 
 
 def test_owner_can_submit_and_reserve_in_one_request(client):
