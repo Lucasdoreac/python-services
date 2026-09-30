@@ -1,7 +1,8 @@
-from flask import Blueprint, jsonify, request, make_response
+from flask import Blueprint, Response, jsonify, request, make_response
 from flasgger import swag_from
 
 from utils.enums import EventStatus
+from DAL import ReservationManager
 from .swagger_docs import get_swagger_specification
 from BLL import FlowController,pdf
 from .auth_decorators import token_required
@@ -14,6 +15,32 @@ events_bp = Blueprint('events', __name__)
 
 
 class EventsRoutes:
+    @staticmethod
+    @events_bp.route('/events/<string:event_id>/pdf', methods=['GET'])
+    def get_event_pdf(event_id):
+        """Serve the generated event PDF stored in MongoDB."""
+        try:
+            pdf_document = ReservationManager().get_pdf_by_event_id(event_id)
+            if not pdf_document or not pdf_document.get('content'):
+                return jsonify({'error': 'PDF not found'}), 404
+
+            response = Response(
+                pdf_document['content'],
+                mimetype=pdf_document.get('contentType', 'application/pdf'),
+            )
+            response.headers['Content-Disposition'] = (
+                f"inline; filename=\"{pdf_document.get('filename', f'{event_id}.pdf')}\""
+            )
+            response.headers['Cache-Control'] = 'public, max-age=3600'
+            return response
+        except Exception as error:
+            AppLogger.log(
+                f"Erro ao buscar PDF do evento: {error}",
+                LogType.ERROR,
+                ip_address=request.remote_addr,
+            )
+            return jsonify({'error': 'Internal Server Error'}), 500
+
     @staticmethod
     @events_bp.route('/events', methods=['POST'])
     @token_required
