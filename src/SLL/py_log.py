@@ -54,6 +54,8 @@ class Logmessage(Enum):
     AUTH_SERVICE_UNAVAILABLE = "Authentication service unavailable;"
     INTERNAL_APIS_CRASHED = "Internal APIs crashed; IP: {ip_address}; Payload: {payload}; Endpoint: {endpoint}; Error: {error};"
     ID_NOT_INFORMED = "ID not informed or null; IP: {ip_address}; Collection: {collection}; ID: {id};"
+    EVENT_OWNER_MISMATCH = "Event {event_id} update denied to a non-organizer; IP: {ip_address};"
+    EVENT_APPROVAL_START_FAILED = "Event {event_id} approval start failed: {error}; IP: {ip_address};"
 
 
 

@@ -1,8 +1,11 @@
+from functools import wraps
+
+from bson import ObjectId
 from flask import Blueprint, Response, jsonify, request, make_response
 from flasgger import swag_from
 
 from utils.enums import EventStatus
-from DAL import ReservationManager
+from DAL import ReservationConflict, ReservationManager
 from .swagger_docs import get_swagger_specification
 from BLL import FlowController,pdf
 from .auth_decorators import token_required
@@ -12,6 +15,61 @@ from BLL import send_to_coordenacao, send_reservation_info_to_reitoria
 
 # Define your Flask Blueprint
 events_bp = Blueprint('events', __name__)
+
+
+def owner_required(function):
+    """Permite alteração e submissão somente ao organizador autenticado."""
+    @wraps(function)
+    def decorated(event_id, *args, **kwargs):
+        event = (
+            FlowController.find_event_by_event_id(event_id)
+            if ObjectId.is_valid(event_id)
+            else None
+        )
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+        owner_email = ((event.get('organizer') or {}).get('email') or '').strip().lower()
+        request_email = (request.headers.get('email') or '').strip().lower()
+        if owner_email != request_email:
+            AppLogger.log(
+                Logmessage.EVENT_OWNER_MISMATCH,
+                LogType.WARNING,
+                event_id=event_id,
+                ip_address=request.remote_addr,
+            )
+            return jsonify({'error': 'Only the organizer can change this event'}), 403
+        return function(event_id, *args, **kwargs)
+    return decorated
+
+
+def _status_code(result):
+    return result[1] if isinstance(result, tuple) else getattr(result, 'status_code', 200)
+
+
+def update_and_start_approval(event_id, data):
+    result = FlowController.update_event(event_id, data)
+    if _status_code(result) >= 400:
+        return result
+    try:
+        if data.get('status') == 'requested':
+            if data.get('classificacao') in ['lecture', 'workshop']:
+                data['status'] = EventStatus.WAITING.value
+                pdf.generate_event_pdf(event_id=data['eventId'])
+                send_to_coordenacao(event_id=data['eventId'])
+            elif data.get('classificacao') in ['class', 'exam']:
+                data['status'] = EventStatus.DIRECT_APPROVAL.value
+                FlowController.update_event(event_id, data)
+                send_reservation_info_to_reitoria(event_id=data['eventId'])
+            result = FlowController.update_event(event_id, data)
+    except Exception as error:
+        AppLogger.log(
+            Logmessage.EVENT_APPROVAL_START_FAILED,
+            LogType.ERROR,
+            event_id=data.get('eventId'),
+            error=error,
+            ip_address=request.remote_addr,
+        )
+    return result
 
 
 class EventsRoutes:
@@ -109,6 +167,7 @@ class EventsRoutes:
 
     @events_bp.route('/events/<string:event_id>', methods=['PUT'])
     @token_required
+    @owner_required
     @swag_from(get_swagger_specification(path='events', method='PUT'))
     def put_event(event_id):
         """
@@ -137,27 +196,44 @@ class EventsRoutes:
         user_email = request.headers.get('email')
 
         data['userEmail'] = user_email
+        result = update_and_start_approval(event_id, data)
 
-        result = FlowController.update_event(event_id, data)
+        response = make_response(result)
+        response.headers['Cache-Control'] = 'no-cache, no-store'
+        response.headers['Pragma'] = 'no-cache'
+        return response
 
+    @staticmethod
+    @events_bp.route('/events/<string:event_id>/submit', methods=['POST'])
+    @token_required
+    @owner_required
+    @swag_from(get_swagger_specification(path='events', method='SUBMIT'))
+    def submit_event(event_id):
+        """Reserva a sala e envia o evento para aprovação em uma chamada."""
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Missing data'}), 400
         try:
-            if data['status'] == 'requested': # flag que o front-end envia quando o evento é solicitado
-                # Enviar informação sobre evento ou reserva simples
-                if data['classificacao'] in ['lecture', 'workshop']:
-                    data['status'] = EventStatus.WAITING.value
-                    pdf.generate_event_pdf(event_id=data['eventId'])
-                    send_to_coordenacao(event_id=data['eventId'])
-                elif data['classificacao'] in ['class', 'exam']:
-                    data['status'] = EventStatus.DIRECT_APPROVAL.value
-                    FlowController.update_event(event_id, data)
-                    send_reservation_info_to_reitoria(event_id=data['eventId'])
-                result = FlowController.update_event(event_id, data)
-        except Exception as e:
-            AppLogger.log(
-                f"Erro ao começar processo de aprovação (status = requested) {data['eventId']}",
-                LogType.ERROR,
-                ip_address=request.remote_addr,
-            )
+            room_id = data['roomId']
+            reservation_date = data['reservationDate']
+        except KeyError as error:
+            return jsonify({'error': f'Missing field: {error}'}), 400
+
+        data.update({
+            'eventId': event_id,
+            'status': 'requested',
+            'userEmail': request.headers.get('email'),
+        })
+        try:
+            reservation = FlowController.reserve_for_event(event_id, room_id, reservation_date)
+        except ReservationConflict as error:
+            return jsonify({'error': str(error)}), 409
+        except ValueError as error:
+            return jsonify({'error': f'Invalid data format: {error}'}), 400
+
+        result = update_and_start_approval(event_id, data)
+        if _status_code(result) >= 400 and reservation is not None:
+            FlowController.undo_reservation(reservation)
 
         response = make_response(result)
         response.headers['Cache-Control'] = 'no-cache, no-store'
