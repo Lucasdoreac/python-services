@@ -1,41 +1,59 @@
 import os
-from flask import Blueprint, request, jsonify
-from BLL import send_to_reitoria, send_to_coordenacao, send_event_status, send_reservation_info_to_reitoria
-from BLL.send_emails import verify_token_from_email, apply_token_action
-from functools import wraps
+from flask import Blueprint, request, jsonify, render_template, make_response
+from BLL import send_to_reitoria, send_to_coordenacao, send_reservation_info_to_reitoria
+from BLL.send_emails import verify_token_from_email, perform_approval_action
 
 # Create a blueprint for handling templates and related routes.
 templates_bp = Blueprint('templates_bp', __name__, template_folder='../templates')
 
 
-def check_request(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        tokenId = request.args.get('tokenId')
-        eventId = request.args.get('eventId')
+def _approval_action(action):
+    def secure(response):
+        response = make_response(response)
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
 
-        if not (eventId and tokenId):
-            return "Not found", 404
+    event_id = request.values.get("eventId")
+    token_id = request.values.get("tokenId")
+    if not event_id or not token_id:
+        return secure((jsonify({'error': 'Link de aprovação inválido'}), 404))
 
-        is_token_valid = verify_token_from_email(tokenId)
+    token = verify_token_from_email(token_id, event_id, action)
+    if not token:
+        return secure((jsonify({'error': 'Link expirado ou inválido'}), 404))
 
-        if is_token_valid is False:
-            return jsonify({'token': 'Desativado ou Não autorizado'}), 404
+    step = int(token["step"])
+    who = "Coordenação" if step == 0 else "Reitoria"
+    if request.method == "GET":
+        labels = {
+            "approve": "aprovar este evento",
+            "reject": "rejeitar este evento",
+        }
+        return secure(render_template(
+            "email/confirmar_acao.html",
+            event_id=event_id,
+            token_id=token_id,
+            action=action,
+            action_label=labels[action],
+            who=who,
+        ))
 
-        return f(*args, **kwargs)
-
-    return decorated_function
+    result = perform_approval_action(event_id, token_id, action)
+    if not result:
+        return secure((jsonify({'error': 'A etapa do evento mudou ou o link já foi utilizado'}), 409))
+    return secure("Evento aprovado!" if action == "approve" else "Evento rejeitado!")
 
 
 @templates_bp.route('/administration_approval', methods=['GET', 'POST'])
-@check_request
 def administration_approval():
     eventId = request.args.get('eventId')
-    step = request.args.get('step')
-
-    if not step:
+    token_id = request.args.get('tokenId')
+    token = verify_token_from_email(token_id, eventId, "approve") if token_id and eventId else None
+    if not token:
         return "Not found", 404
-    step = int(step)
+    step = int(token["step"])
     if step == 0:
         if os.getenv("FLASK_ENV") == "development":
             return send_to_coordenacao(eventId)
@@ -44,47 +62,22 @@ def administration_approval():
             return send_to_reitoria(eventId)
 
 
-@templates_bp.route('/approve')
-@check_request
+@templates_bp.route('/approve', methods=['GET', 'POST'])
 def approve():
-    eventId = request.args.get('eventId')
-    who = request.args.get('who')
-    token = request.args.get('tokenId')
-
-    send_event_status(eventId, True, who, token)
-    if who == "coordenacao":
-        if os.getenv("FLASK_ENV") == "development":
-            return send_to_reitoria(eventId)
-        send_to_reitoria(eventId)
-    return "Evento aprovado!"
+    return _approval_action("approve")
 
 
-@templates_bp.route('/reject')
-@check_request
+@templates_bp.route('/reject', methods=['GET', 'POST'])
 def reject():
-    eventId = request.args.get('eventId')
-    who = request.args.get('who')
-    token = request.args.get('tokenId')
-
-    if os.getenv("FLASK_ENV") == "development":
-        return send_event_status(eventId, False, who, token)
-    send_event_status(eventId, False, who, token)
-    return "Evento rejeitado!"
+    return _approval_action("reject")
 
 
-@templates_bp.route('/request_changes')
-@check_request
+@templates_bp.route('/request_changes', methods=['GET', 'POST'])
 def request_changes():
-    # Add your business logic for requesting changes to the event here.
-    eventId = request.args.get('eventId')
-    who = request.args.get('who')
-    token = request.args.get('tokenId')
-
-    if who == 'coordenacao':
-        apply_token_action(0, "Request Changes", eventId, token)
-    else:
-        apply_token_action(1, "Request Changes", eventId, token)
-    return "Solicitando alterações no evento!"
+    return make_response(
+        jsonify({'error': 'A opção de solicitar alterações está temporariamente indisponível'}),
+        410,
+    )
 
 
 @templates_bp.route('/notify_reservation', methods=['GET'])

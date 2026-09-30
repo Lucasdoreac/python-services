@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from .base_repository import BaseRepository
 
 
@@ -20,8 +20,14 @@ class SendEmailrepository(BaseRepository):
         return collection.update_one(query, updated_fields)
 
     def get_send_email_by_token_id(self, tokenId: str):
-        return self.find_all({"tokenId": tokenId})
+        return self.get_collection_name().find_one({"tokenId": tokenId})
 
+    def deactivate_active_for_event_step(self, event_id, step):
+        """Revoke all prior email buttons before issuing a replacement set."""
+        return self.get_collection_name().update_many(
+            {"eventId": event_id, "step": int(step), "active": True},
+            {"$set": {"active": False, "revoked_at": datetime.now()}},
+        )
 
 class RoomsRepository(BaseRepository):
     def get_collection_name(self):
@@ -63,6 +69,3 @@ class ReservationsRepository(BaseRepository):
     def find_by_query(self, query):
         collection = self.get_collection_name()
         return collection.find_one(query)
-
-
-

@@ -191,6 +191,144 @@ class ReservationManager:
                           status=event_data.get("status"))
             raise e
 
+    def activate_approval_token_group(self, event_id, step, expected_status, group_id):
+        """Set the only valid token group for an event's current approval stage."""
+        from bson import ObjectId
+        key = f"approvalTokenGroups.{int(step)}"
+        event = self.events_collection.find_one(
+            {"_id": ObjectId(event_id), "status": expected_status},
+            {"approvalTokenGroups": 1},
+        )
+        if not event:
+            return False
+        current_group = (event.get("approvalTokenGroups") or {}).get(str(step))
+        query = {"_id": ObjectId(event_id), "status": expected_status}
+        query[key] = current_group if current_group is not None else {"$exists": False}
+        result = self.events_collection.update_one(
+            query, {"$set": {key: group_id}}
+        )
+        return result.modified_count == 1 or result.matched_count == 1
+
+    def transition_event_status(
+        self, event_id: str, token_id: str, action: str, expected_status: str,
+        new_status: str, step: int, group_id: str
+    ):
+        """Consume a scoped token and transition its event/reservation together."""
+        from bson import ObjectId
+        from pymongo.errors import PyMongoError
+
+        group_key = f"approvalTokenGroups.{int(step)}"
+
+        class TransitionConflict(Exception):
+            pass
+
+        state = {"event_changed": False, "reservation_changed": False}
+
+        def apply(session=None):
+            options = {"session": session} if session is not None else {}
+            token = self.send_email_collection.update_one(
+                {
+                    "tokenId": token_id,
+                    "eventId": event_id,
+                    "step": int(step),
+                    "action": action,
+                    "groupId": group_id,
+                    "active": True,
+                },
+                {"$set": {"active": False, "consumed_at": datetime.now()}},
+                **options,
+            )
+            if token.modified_count != 1:
+                return False
+
+            event = self.events_collection.update_one(
+                {"_id": ObjectId(event_id), "status": expected_status, group_key: group_id},
+                {"$set": {"status": new_status}, "$unset": {group_key: ""}},
+                **options,
+            )
+            if event.modified_count != 1:
+                raise TransitionConflict("Event approval stage changed")
+            state["event_changed"] = True
+
+            reservation = self.reservation_collection.update_one(
+                {"eventId": event_id, "status": expected_status},
+                {"$set": {"status": new_status}},
+                **options,
+            )
+            if reservation.matched_count != 1:
+                raise TransitionConflict("Event reservation status was not updated")
+            state["reservation_changed"] = True
+
+            self.send_email_collection.update_many(
+                {
+                    "eventId": event_id,
+                    "step": int(step),
+                    "groupId": group_id,
+                    "active": True,
+                },
+                {"$set": {"active": False, "consumed_at": datetime.now()}},
+                **options,
+            )
+            return True
+
+        topology = getattr(
+            getattr(self.db.client, "topology_description", None),
+            "topology_type_name",
+            "Single",
+        )
+        if topology in ("ReplicaSetWithPrimary", "ReplicaSetNoPrimary", "Sharded", "LoadBalanced"):
+            try:
+                with self.db.client.start_session() as session:
+                    return session.with_transaction(apply)
+            except TransitionConflict:
+                return False
+
+        # Standalone development Mongo and mongomock cannot run multi-document
+        # transactions. Use compare-and-set writes and compensate failed status
+        # updates so normal errors do not leave event and reservation divergent.
+        try:
+            return apply()
+        except TransitionConflict:
+            if state["event_changed"] and not state["reservation_changed"]:
+                self.events_collection.update_one(
+                    {"_id": ObjectId(event_id), "status": new_status, group_key: {"$exists": False}},
+                    {"$set": {"status": expected_status, group_key: group_id}},
+                )
+            current = self.events_collection.find_one(
+                {"_id": ObjectId(event_id), "status": expected_status, group_key: group_id}
+            )
+            if current:
+                self.send_email_collection.update_one(
+                    {
+                        "tokenId": token_id,
+                        "eventId": event_id,
+                        "step": int(step),
+                        "action": action,
+                        "groupId": group_id,
+                        "active": False,
+                    },
+                    {"$set": {"active": True}, "$unset": {"consumed_at": ""}},
+                )
+            return False
+        except PyMongoError:
+            if state["event_changed"] and not state["reservation_changed"]:
+                self.events_collection.update_one(
+                    {"_id": ObjectId(event_id), "status": new_status, group_key: {"$exists": False}},
+                    {"$set": {"status": expected_status, group_key: group_id}},
+                )
+                self.send_email_collection.update_one(
+                    {
+                        "tokenId": token_id,
+                        "eventId": event_id,
+                        "step": int(step),
+                        "action": action,
+                        "groupId": group_id,
+                        "active": False,
+                    },
+                    {"$set": {"active": True}, "$unset": {"consumed_at": ""}},
+                )
+            raise
+
     def insert_pdf(self, pdf_data):
         try:
             existing = self.pdfs_collection.find_one({"eventId": str(pdf_data.get("eventId"))})
@@ -208,15 +346,16 @@ class ReservationManager:
     def get_pdf_by_event_id(self, event_id):
         return self.pdfs_collection.find_one({"eventId": str(event_id)})
 
-    def insert_send_email(self,token,step,eventId):
+    def insert_send_email(self, token, step, eventId, action, group_id):
         document = {
             'tokenId': token,
             'step':int(step),
             'eventId':eventId,
+            'groupId': group_id,
             'created_at': datetime.now(),
             'active': True,
             'update_at': datetime.now(),
-            'action' : 'waiting'
+            'action': action,
         }
         result = self.send_email_collection.insert_one(document)
         return str(result.inserted_id)

@@ -47,29 +47,41 @@ def _status_code(result):
 
 
 def update_and_start_approval(event_id, data):
-    result = FlowController.update_event(event_id, data)
-    if _status_code(result) >= 400:
-        return result
-    try:
-        if data.get('status') == 'requested':
-            if data.get('classificacao') in ['lecture', 'workshop']:
-                data['status'] = EventStatus.WAITING.value
+    if data.get('status') == 'requested':
+        if data.get('classificacao') in ['lecture', 'workshop']:
+            data['status'] = EventStatus.WAITING.value
+            result = FlowController.update_event(event_id, data)
+            if _status_code(result) >= 400:
+                return result
+            try:
                 pdf.generate_event_pdf(event_id=data['eventId'])
                 send_to_coordenacao(event_id=data['eventId'])
-            elif data.get('classificacao') in ['class', 'exam']:
-                data['status'] = EventStatus.DIRECT_APPROVAL.value
-                FlowController.update_event(event_id, data)
-                send_reservation_info_to_reitoria(event_id=data['eventId'])
+            except Exception as error:
+                AppLogger.log(
+                    Logmessage.EVENT_APPROVAL_START_FAILED,
+                    LogType.ERROR,
+                    event_id=data.get('eventId'),
+                    error=error,
+                    ip_address=request.remote_addr,
+                )
+            return result
+        if data.get('classificacao') in ['class', 'exam']:
+            data['status'] = EventStatus.DIRECT_APPROVAL.value
             result = FlowController.update_event(event_id, data)
-    except Exception as error:
-        AppLogger.log(
-            Logmessage.EVENT_APPROVAL_START_FAILED,
-            LogType.ERROR,
-            event_id=data.get('eventId'),
-            error=error,
-            ip_address=request.remote_addr,
-        )
-    return result
+            if _status_code(result) >= 400:
+                return result
+            try:
+                send_reservation_info_to_reitoria(event_id=data['eventId'])
+            except Exception as error:
+                AppLogger.log(
+                    Logmessage.EVENT_APPROVAL_START_FAILED,
+                    LogType.ERROR,
+                    event_id=data.get('eventId'),
+                    error=error,
+                    ip_address=request.remote_addr,
+                )
+            return result
+    return FlowController.update_event(event_id, data)
 
 
 class EventsRoutes:
