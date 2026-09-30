@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from hashlib import sha256
+from secrets import token_urlsafe
 from DAL.collections_repositories import SendEmailrepository
 from flask import render_template, current_app, url_for
 from DAL import ReservationManager
@@ -52,8 +52,35 @@ def send_to_coordenacao(event_id):
     """
     if is_email_dry_run() and os.getenv("FLASK_ENV") != "development":
         return dry_run_response()
-    #crair email token de uso UNICO(so desativa token quando a acao for tomada ex: approve,rejected or requested change)
-    tokenId = create_send_email_token(event_id, step=EmailStep.COORDENACAO)
+    recipients = list(emails["coordenacao"])
+    try:
+        course_id = FlowController.find_event_by_event_id(event_id)
+        coordinator_id = get_coordinator_by_graduation_id(course_id['graduationId'])
+        teacher_email = find_teacher_email_by_id(coordinator_id) if coordinator_id else None
+        if teacher_email and teacher_email not in recipients:
+            recipients.append(teacher_email)
+    except (IndexError, KeyError, TypeError):
+        AppLogger.log(
+            "Coordinator email unavailable; using configured coordination recipients",
+            LogType.WARNING,
+            event_id=event_id,
+        )
+    if not recipients:
+        raise ValueError("No coordination email recipient is available")
+
+    group_id = token_urlsafe(24)
+    reservation_manager = ReservationManager()
+    send_email_repository.deactivate_active_for_event_step(
+        event_id, EmailStep.COORDENACAO.value
+    )
+    if not reservation_manager.activate_approval_token_group(
+        event_id, EmailStep.COORDENACAO.value, EventStatus.WAITING.value, group_id
+    ):
+        raise ValueError("Evento não está aguardando aprovação da Coordenação")
+    tokens = {
+        action: create_send_email_token(event_id, EmailStep.COORDENACAO, action, group_id)
+        for action in ("approve", "reject")
+    }
     # MinIO icon URLs (adjust paths as needed)
     pdf_link = _pdf_link(event_id)
     pdf_icon_url = _icon_url("pdf.png")
@@ -63,14 +90,9 @@ def send_to_coordenacao(event_id):
 
     # Example links (adjust to your routes)
     with current_app.test_request_context():
-        request_changes_link = url_for('templates_bp.request_changes', eventId=event_id, tokenId=tokenId, _external=True)
-        approve_link = url_for('templates_bp.approve', eventId=event_id, tokenId=tokenId, who='coordenacao', _external=True)
-        reject_link = url_for('templates_bp.reject', eventId=event_id, tokenId=tokenId, who='coordenacao', _external=True)
-
-    course_id = FlowController.find_event_by_event_id(event_id)
-    coordinator_id = get_coordinator_by_graduation_id(course_id['graduationId'])
-    teacher_email = find_teacher_email_by_id(coordinator_id)
-    emails["coordenacao"].append(teacher_email)
+        request_changes_link = None
+        approve_link = url_for('templates_bp.approve', eventId=event_id, tokenId=tokens["approve"], _external=True)
+        reject_link = url_for('templates_bp.reject', eventId=event_id, tokenId=tokens["reject"], _external=True)
 
     # Render the template with the appropriate data
     html_content = render_template(
@@ -92,10 +114,10 @@ def send_to_coordenacao(event_id):
     payload = {
         'subject': 'Evento para Aprovação - Coordenação',
         'content': html_content,
-        'to': ", ".join(emails["coordenacao"]),
+        'to': ", ".join(recipients),
         'is_html': True
     }
-    AppLogger.log(Logmessage.SENDING_EMAIL, LogType.INFO, email=emails["coordenacao"], event=event_id, token=tokenId)
+    AppLogger.log(Logmessage.SENDING_EMAIL, LogType.INFO, email=recipients, event=event_id)
     return send_email(payload)
 
 def send_to_reitoria(event_id):
@@ -111,8 +133,22 @@ def send_to_reitoria(event_id):
     """
     if is_email_dry_run() and os.getenv("FLASK_ENV") != "development":
         return dry_run_response()
-    # crair email token de uso UNICO(so desativa token quando a acao for tomada ex: approve,rejected or requested change)
-    tokenId = create_send_email_token(event_id, step=EmailStep.REITORIA)
+    group_id = token_urlsafe(24)
+    reservation_manager = ReservationManager()
+    send_email_repository.deactivate_active_for_event_step(
+        event_id, EmailStep.REITORIA.value
+    )
+    if not reservation_manager.activate_approval_token_group(
+        event_id,
+        EmailStep.REITORIA.value,
+        EventStatus.APPROVED_BY_COORDENACAO.value,
+        group_id,
+    ):
+        raise ValueError("Evento não está aguardando aprovação da Reitoria")
+    tokens = {
+        action: create_send_email_token(event_id, EmailStep.REITORIA, action, group_id)
+        for action in ("approve", "reject")
+    }
 
     # MinIO icon URLs (adjust paths as needed)
     pdf_icon_url = _icon_url("pdf.png")
@@ -124,8 +160,8 @@ def send_to_reitoria(event_id):
     # Maybe Reitoria doesn't need a 'request changes' link. You can omit or include it as needed.
     request_changes_link = None
     with current_app.test_request_context():
-        approve_link = url_for('templates_bp.approve', eventId=event_id, tokenId=tokenId, who='reitoria', _external=True)
-        reject_link = url_for('templates_bp.reject', eventId=event_id, tokenId=tokenId, who='reitoria', _external=True)
+        approve_link = url_for('templates_bp.approve', eventId=event_id, tokenId=tokens["approve"], _external=True)
+        reject_link = url_for('templates_bp.reject', eventId=event_id, tokenId=tokens["reject"], _external=True)
 
     # Render the template with the appropriate data
     html_content = render_template(
@@ -150,7 +186,7 @@ def send_to_reitoria(event_id):
         'to': ", ".join(emails["reitoria"]),
         'is_html': True
     }
-    AppLogger.log(Logmessage.SENDING_EMAIL, LogType.INFO, email=emails["reitoria"], event=event_id, token=tokenId)
+    AppLogger.log(Logmessage.SENDING_EMAIL, LogType.INFO, email=emails["reitoria"], event=event_id)
     return send_email(payload)
 
 
@@ -247,7 +283,7 @@ def send_reservation_info_to_reitoria(event_id, reservation_date=None, classific
 
     return send_email(payload)
 
-def send_event_status(event_id, is_approved: bool, who: str, token:str):
+def send_event_status(event_id, is_approved: bool, who: str, token: str = None):
     """
     Sends an email to inform the user if the event was approved or denied.
 
@@ -267,29 +303,8 @@ def send_event_status(event_id, is_approved: bool, who: str, token:str):
         action='approved' if is_approved else 'rejected',
         who=who,
         token=token)
-    event_status = ""
-    if is_approved:
-        if who == 'coordenacao':
-            apply_token_action(0, 'approved', event_id, token)
-            event_status = EventStatus.APPROVED_BY_COORDENACAO.value
-        else:
-            apply_token_action(1, 'approved', event_id, token)
-            event_status = EventStatus.APPROVED_BY_REITORIA.value
-    else:
-        if who == 'coordenacao':
-            apply_token_action(0, 'rejected', event_id, token)
-            event_status = EventStatus.REJECTED_BY_COORDENACAO.value
-        else:
-            apply_token_action(1, 'rejected', event_id, token)
-            event_status = EventStatus.REJECTED_BY_REITORIA.value
-
     event = events_repository.find_by_id(event_id)
     email = event["organizer"]["email"]
-    event.pop("_id", None)
-    event["status"] = event_status
-    # update event status
-    reservation_manager = ReservationManager()
-    reservation_manager.update_event(event_id, event_data=event)
     # MinIO icon URLs (adjust paths if needed)
     pdf_icon_url = _icon_url("pdf.png")
     approved_icon_url = _icon_url("approved.png")
@@ -321,51 +336,79 @@ def send_event_status(event_id, is_approved: bool, who: str, token:str):
     }
     return send_email(payload)
 
-def verify_token_from_email(tokenId) -> bool:
-    data = send_email_repository.get_send_email_by_token_id(tokenId)
+def _expected_status(step):
+    return (EventStatus.WAITING.value if step == EmailStep.COORDENACAO.value
+            else EventStatus.APPROVED_BY_COORDENACAO.value)
 
-    for record in data:
-        if tokenId == record.get("tokenId") and record.get("active") is True:
-            return True
-        return False
 
-def apply_token_action(step: int, action:str, eventId:str, tokenId: str) -> None:
-    """"
-        deactivate the token after the action is taken
-        Args:
-            step (int): Step of the email process (0 for Coordenação, 1 for Reitoria).
-            action (str): Action to be taken (approve or reject).
-            eventId (str): ID of the event.
-            tokenId (str): Token ID for verification.
-        Returns:
-            None
-    """
-    query = {
-        'eventId': eventId,
-        'step': step,
-        'tokenId': tokenId,
-    }
-
-    new_values = {
-        '$set': {
-            'step': step,
-            'active': False,
-            'action': action,
-            'update_at': datetime.now()  # Atualiza o timestamp de modificação
-        }
-    }
-
-    send_email_repository.update_one(query, new_values)
-    
+def verify_token_from_email(token_id, event_id, action):
+    """Return an active token only when event, approval stage, and action match."""
+    if action not in ("approve", "reject"):
+        return None
+    record = send_email_repository.get_send_email_by_token_id(token_id)
+    if not record or record.get("active") is not True:
+        return None
+    if record.get("eventId") != event_id or record.get("action") != action:
+        return None
+    try:
+        step = int(record["step"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if step not in (EmailStep.COORDENACAO.value, EmailStep.REITORIA.value):
+        return None
+    event = events_repository.find_by_id(event_id)
+    if not event or event.get("status") != _expected_status(step):
+        return None
+    current_group = (event.get("approvalTokenGroups") or {}).get(str(step))
+    if not record.get("groupId") or current_group != record.get("groupId"):
+        return None
+    return record
 
 send_email_repository = SendEmailrepository()
 
-def create_send_email_token(event_id: str,step: EmailStep)-> str:
-    now = datetime.now()
-    tokenId = sha256(str(now).encode()).hexdigest()
+def create_send_email_token(event_id: str, step: EmailStep, action: str, group_id: str) -> str:
+    tokenId = token_urlsafe(32)
     reservation_manager = ReservationManager()
-    reservation_manager.insert_send_email(tokenId, step.value, event_id)
+    reservation_manager.insert_send_email(tokenId, step.value, event_id, action, group_id)
     return tokenId
+
+
+def perform_approval_action(event_id: str, token_id: str, action: str):
+    """Consume a scoped token and atomically transition the event from its expected status."""
+    record = verify_token_from_email(token_id, event_id, action)
+    if not record:
+        return None
+    step = int(record["step"])
+    if action == "approve":
+        new_status = (EventStatus.APPROVED_BY_COORDENACAO.value
+                      if step == EmailStep.COORDENACAO.value
+                      else EventStatus.APPROVED_BY_REITORIA.value)
+    elif action == "reject":
+        new_status = (EventStatus.REJECTED_BY_COORDENACAO.value
+                      if step == EmailStep.COORDENACAO.value
+                      else EventStatus.REJECTED_BY_REITORIA.value)
+    else:
+        return None
+
+    if not ReservationManager().transition_event_status(
+        event_id,
+        token_id,
+        action,
+        _expected_status(step),
+        new_status,
+        step,
+        record["groupId"],
+    ):
+        return None
+    if action in ("approve", "reject"):
+        send_event_status(
+            event_id,
+            action == "approve",
+            "coordenacao" if step == EmailStep.COORDENACAO.value else "reitoria",
+        )
+        if action == "approve" and step == EmailStep.COORDENACAO.value:
+            send_to_reitoria(event_id)
+    return step, new_status
 
 def get_coordinator_by_graduation_id(graduationId: str)-> str:
     course = GraphQlRequestMethods.get_course_by_id(graduationId)

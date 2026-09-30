@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Confirmar ação</title>
+</head>
+<body>
+    <main>
+        <h1>Confirmação da Coordenação/Reitoria</h1>
+        <p>{{ who }}: confirme se deseja {{ action_label }}.</p>
+        <form method="post" action="/{{ action }}">
+            <input type="hidden" name="eventId" value="{{ event_id }}" />
+            <input type="hidden" name="tokenId" value="{{ token_id }}" />
+            <button type="submit">Confirmar</button>
+        </form>
+    </main>
+</body>
+</html>
