@@ -83,6 +83,8 @@ class FlowController:
             return jsonify({'error': f'Missing field: {str(e)}'}), 400
         except ValueError as e:
             return jsonify({'error': 'Invalid data format'}), 400
+        except ReservationLockTimeout:
+            return jsonify({'error': 'Reservation is busy; retry the request'}), 503
 
     @staticmethod
     def reserve_for_event(event_id: str, room_id: str, reservation_date_str: str):
@@ -372,4 +374,3 @@ class FlowController:
             "roomId": room_id
         }
         return reservations_repository.find_by_query(query) is not None
-

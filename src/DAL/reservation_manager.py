@@ -1,6 +1,8 @@
 from typing import Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pymongo.errors import DuplicateKeyError
+from time import monotonic, sleep
+from uuid import uuid4
 
 from SLL import AppLogger, LogType, Logmessage
 from .mongodb_factory import MongoDBConnectionFactory
@@ -22,15 +24,21 @@ class ReservationConflict(ValueError):
     """A sala já está reservada no horário solicitado."""
 
 
+class ReservationLockTimeout(RuntimeError):
+    """Não foi possível serializar a operação de reserva a tempo."""
+
+
 class ReservationManager:
+    _LOCK_LEASE = timedelta(seconds=120)
+    _LOCK_WAIT_SECONDS = 30
+    _LOCK_RETRY_SECONDS = 0.025
 
     @staticmethod
     def ensure_indexes():
-        """Create the partial unique index used to reject duplicate reservations.
+        """Create a database-level backstop for identical active start times.
 
-        The overlap check in ``insert_reservation`` is not atomic across
-        concurrent requests. This index preserves the Production guard for
-        active reservations with the same room and start time.
+        ``insert_reservation`` serializes interval checks per room; the index
+        also protects duplicate starts if another writer bypasses that method.
         """
         MongoDBConnectionFactory.get_db().reservations.create_index(
             [("roomId", 1), ("startAt", 1)],
@@ -42,11 +50,61 @@ class ReservationManager:
     def __init__(self):
         self.db = MongoDBConnectionFactory.get_db()
         self.reservation_collection = self.db.reservations
+        self.reservation_locks_collection = self.db.reservation_locks
         self.rooms_collection = self.db.rooms
         self.buildings_collection = self.db.buildings
         self.events_collection = self.db.events
         self.pdfs_collection = self.db.pdfs
         self.send_email_collection = self.db.send_email
+
+    @staticmethod
+    def _reservation_lock_id(room_id):
+        return f"room:{room_id}"
+
+    def _acquire_reservation_lock(self, room_id):
+        lock_id = self._reservation_lock_id(room_id)
+        owner = uuid4().hex
+        deadline = monotonic() + self._LOCK_WAIT_SECONDS
+
+        while True:
+            now = datetime.now(timezone.utc)
+            expires_at = now + self._LOCK_LEASE
+            renewed = self.reservation_locks_collection.update_one(
+                {"_id": lock_id, "leaseExpiresAt": {"$lte": now}},
+                {"$set": {"owner": owner, "leaseExpiresAt": expires_at}},
+            )
+            if renewed.modified_count:
+                return lock_id, owner
+
+            try:
+                self.reservation_locks_collection.insert_one(
+                    {"_id": lock_id, "owner": owner, "leaseExpiresAt": expires_at}
+                )
+                return lock_id, owner
+            except DuplicateKeyError:
+                # Another API process owns this room lock, or acquired it first.
+                pass
+
+            if monotonic() >= deadline:
+                raise ReservationLockTimeout(
+                    "Could not acquire the room reservation lock; retry the request."
+                )
+            sleep(self._LOCK_RETRY_SECONDS)
+
+    def _owns_reservation_lock(self, lock_id, owner):
+        return self.reservation_locks_collection.find_one(
+            {
+                "_id": lock_id,
+                "owner": owner,
+                "leaseExpiresAt": {"$gt": datetime.now(timezone.utc)},
+            },
+            {"_id": 1},
+        ) is not None
+
+    def _release_reservation_lock(self, lock_id, owner):
+        self.reservation_locks_collection.delete_one(
+            {"_id": lock_id, "owner": owner}
+        )
 
     def insert_reservation(self, room_id, event_id, date, start_time, end_time):
         """
@@ -68,29 +126,43 @@ class ReservationManager:
         reservation_start_time = datetime.combine(date, start_time)
         reservation_end_time = datetime.combine(date, end_time)
 
-        # Verifica conflitos na reserva para o mesmo horário
-        conflict = self.reservation_collection.find_one({
-            "roomId": room_id,
-            "startAt": {"$lt": reservation_end_time},
-            "endAt": {"$gt": reservation_start_time},
-            "status": {"$in": ACTIVE_RESERVATION_STATUSES},
-        })
-        if conflict:
-            raise ReservationConflict("This time slot is already booked.")
-
-        reservation = {
-            "roomId": room_id,
-            "eventId": event_id,  # Armazena o eventId no documento
-            "startAt": reservation_start_time,
-            "endAt": reservation_end_time,
-            "status": EventStatus.WAITING.value,
-        }
-
+        lock_id, owner = self._acquire_reservation_lock(room_id)
         try:
-            self.reservation_collection.insert_one(reservation)
-        except DuplicateKeyError as error:
-            raise ReservationConflict("This time slot is already booked.") from error
-        return reservation
+            conflict = self.reservation_collection.find_one({
+                "roomId": room_id,
+                "startAt": {"$lt": reservation_end_time},
+                "endAt": {"$gt": reservation_start_time},
+                "status": {"$in": ACTIVE_RESERVATION_STATUSES},
+            })
+            if conflict:
+                raise ReservationConflict("This time slot is already booked.")
+
+            if not self._owns_reservation_lock(lock_id, owner):
+                raise ReservationLockTimeout(
+                    "The room reservation lock expired; retry the request."
+                )
+
+            reservation = {
+                "roomId": room_id,
+                "eventId": event_id,  # Armazena o eventId no documento
+                "startAt": reservation_start_time,
+                "endAt": reservation_end_time,
+                "status": EventStatus.WAITING.value,
+            }
+
+            try:
+                result = self.reservation_collection.insert_one(reservation)
+            except DuplicateKeyError as error:
+                raise ReservationConflict("This time slot is already booked.") from error
+
+            if not self._owns_reservation_lock(lock_id, owner):
+                self.reservation_collection.delete_one({"_id": result.inserted_id})
+                raise ReservationLockTimeout(
+                    "The room reservation lock expired; retry the request."
+                )
+            return reservation
+        finally:
+            self._release_reservation_lock(lock_id, owner)
 
     def find_active_reservation(self, event_id, room_id, start_at):
         return self.reservation_collection.find_one({
