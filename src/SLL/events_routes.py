@@ -5,7 +5,7 @@ from flask import Blueprint, Response, jsonify, request, make_response
 from flasgger import swag_from
 
 from utils.enums import EventStatus
-from DAL import ReservationConflict, ReservationManager
+from DAL import ReservationConflict, ReservationLockTimeout, ReservationManager
 from .swagger_docs import get_swagger_specification
 from BLL import FlowController,pdf
 from .auth_decorators import token_required
@@ -283,6 +283,8 @@ class EventsRoutes:
             reservation = FlowController.reserve_for_event(event_id, room_id, reservation_date)
         except ReservationConflict as error:
             return jsonify({'error': str(error)}), 409
+        except ReservationLockTimeout:
+            return jsonify({'error': 'Reservation is busy; retry the request'}), 503
         except ValueError as error:
             return jsonify({'error': 'Invalid data format'}), 400
 
