@@ -30,6 +30,7 @@ class ReservationRoutes:
 
     @staticmethod
     @reservation_bp.route('/reservations/<string:date>', methods=['GET'])
+    @token_required
     @swag_from(get_swagger_specification(path='reservations', method='GET', resource='date'))
     def get_reservation_by_date(date: str):
         reservation = FlowController.filter_reservation_by_date(date)

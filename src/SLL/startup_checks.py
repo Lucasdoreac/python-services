@@ -21,3 +21,4 @@ def require_internal_api_key():
         "Set it to a key listed in the Catalog's API_KEY_LIST "
         "(development only: FLASK_ENV=development and ALLOW_INSECURE_DEV=true)."
     )
+

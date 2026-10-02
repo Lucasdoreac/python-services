@@ -9,6 +9,7 @@ from DAL import ReservationConflict, ReservationManager
 from .swagger_docs import get_swagger_specification
 from BLL import FlowController,pdf
 from .auth_decorators import token_required
+from . import signed_links
 from SLL.py_log import AppLogger,LogType,Logmessage
 from BLL import send_to_coordenacao, send_reservation_info_to_reitoria
 
@@ -88,7 +89,9 @@ class EventsRoutes:
     @staticmethod
     @events_bp.route('/events/<string:event_id>/pdf', methods=['GET'])
     def get_event_pdf(event_id):
-        """Serve the generated event PDF stored in MongoDB."""
+        """Serve the generated event PDF stored in MongoDB, only for a signed link."""
+        if not signed_links.verify(event_id, request.args.get('exp'), request.args.get('sig')):
+            return jsonify({'error': 'Forbidden'}), 403
         try:
             pdf_document = ReservationManager().get_pdf_by_event_id(event_id)
             if not pdf_document or not pdf_document.get('content'):
@@ -101,7 +104,8 @@ class EventsRoutes:
             response.headers['Content-Disposition'] = (
                 f"inline; filename=\"{pdf_document.get('filename', f'{event_id}.pdf')}\""
             )
-            response.headers['Cache-Control'] = 'public, max-age=3600'
+            response.headers['Cache-Control'] = 'private, no-store'
+            response.headers['X-Content-Type-Options'] = 'nosniff'
             return response
         except Exception as error:
             AppLogger.log(

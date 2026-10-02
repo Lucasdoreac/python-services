@@ -1,6 +1,9 @@
 import os
 from flask import Blueprint, request, jsonify, render_template, make_response
+from bson import ObjectId
 from BLL import send_to_reitoria, send_to_coordenacao, send_reservation_info_to_reitoria
+from SLL.auth_decorators import token_required
+from BLL.index import FlowController
 from BLL.send_emails import verify_token_from_email, perform_approval_action
 
 # Create a blueprint for handling templates and related routes.
@@ -81,6 +84,7 @@ def request_changes():
 
 
 @templates_bp.route('/notify_reservation', methods=['GET'])
+@token_required
 def notify_reservation():
     """
     Endpoint para notificar a reitoria sobre uma nova reserva.
@@ -90,6 +94,12 @@ def notify_reservation():
     if not event_id:
         return jsonify({'error': 'eventId is required'}), 400
 
+    event = FlowController.find_event_by_event_id(event_id) if ObjectId.is_valid(event_id) else None
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    owner = ((event.get('organizer') or {}).get('email') or '').strip().lower()
+    if owner != (request.headers.get('email') or '').strip().lower():
+        return jsonify({'error': 'Only the organizer can notify about this event'}), 403
 
     if not event_id:
         return jsonify({'error': 'eventId é obrigatório'}), 400

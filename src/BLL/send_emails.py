@@ -9,6 +9,7 @@ from SLL.cluster_api.request_methods import GraphQlRequestMethods
 from .index import events_repository, FlowController
 from utils.enums import EmailStep, EventStatus
 from SLL.email_service import dry_run_response, is_email_dry_run, send_email
+from SLL.signed_links import signed_query
 
 
 if os.getenv("FLASK_ENV") == "development":
@@ -32,7 +33,11 @@ def _pdf_link(event_id):
 
     scheme = os.getenv("SERVER_SCHEME", "http")
     server_name = os.getenv("SERVER_NAME", "localhost:5000")
-    return f"{scheme}://{server_name}/events/{event_id}/pdf"
+    base = f"{scheme}://{server_name}/events/{event_id}/pdf"
+    try:
+        return f"{base}?{signed_query(event_id)}"
+    except RuntimeError:
+        return base  # development without LINK_SIGNING_KEY: the link will be refused
 
 
 def _icon_url(name):

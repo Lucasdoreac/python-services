@@ -91,3 +91,4 @@ def test_invalid_domains_do_not_consume_the_budget(monkeypatch):
                            headers={"X-Forwarded-For": "203.0.113.5"}).status_code == 400
     assert client.post("/auth/send-link?email=ok@udf.edu.br",
                        headers={"X-Forwarded-For": "203.0.113.5"}).status_code == 201
+

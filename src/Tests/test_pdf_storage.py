@@ -21,9 +21,9 @@ def test_pdf_link_uses_api_without_minio(monkeypatch, app):
     monkeypatch.setenv("SERVER_SCHEME", "https")
     monkeypatch.setenv("SERVER_NAME", "reservas-api.example.com")
 
-    assert send_emails._pdf_link("event-123") == (
-        "https://reservas-api.example.com/events/event-123/pdf"
-    )
+    link = send_emails._pdf_link("event-123")
+    assert link.startswith("https://reservas-api.example.com/events/event-123/pdf?exp=")
+    assert "&sig=" in link
     assert send_emails._icon_url("pdf.png") == ""
 
 
@@ -72,11 +72,11 @@ def test_pdf_route_returns_bytes_from_mongo(monkeypatch, app):
                 "contentType": "application/pdf",
             }
 
-    from SLL import events_routes
+    from SLL import events_routes, signed_links
 
     monkeypatch.setattr(events_routes, "ReservationManager", FakeReservationManager)
 
-    response = app.test_client().get("/events/event-123/pdf")
+    response = app.test_client().get(f"/events/event-123/pdf?{signed_links.signed_query('event-123')}")
 
     assert response.status_code == 200
     assert response.data == b"%PDF-test"
@@ -89,11 +89,11 @@ def test_pdf_route_returns_404_when_not_found(monkeypatch, app):
         def get_pdf_by_event_id(self, event_id):
             return None
 
-    from SLL import events_routes
+    from SLL import events_routes, signed_links
 
     monkeypatch.setattr(events_routes, "ReservationManager", FakeReservationManager)
 
-    response = app.test_client().get("/events/missing/pdf")
+    response = app.test_client().get(f"/events/missing/pdf?{signed_links.signed_query('missing')}")
 
     assert response.status_code == 404
     assert response.get_json() == {"error": "PDF not found"}
