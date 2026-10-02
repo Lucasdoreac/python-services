@@ -3,7 +3,7 @@ from flask import request, jsonify, make_response
 from werkzeug.exceptions import HTTPException
 from functools import wraps
 from SLL import client_limits
-from SLL.auth_upstream import DENIED, OK, call_auth, unavailable_payload
+from SLL.auth_upstream import DENIED, OK, call_auth, forward_headers, unavailable_payload
 from SLL.py_log import AppLogger, LogType, Logmessage, mask_email
 
 
@@ -26,7 +26,8 @@ def token_required(f):
             )
             return jsonify({"error": "Email missing"}) if not email else jsonify({"error": "Token missing"}) , 401
 
-        outcome, upstream = call_auth("GET", url, params={"email": email, "token": token})
+        outcome, upstream = call_auth("GET", url, params={"email": email, "token": token},
+                                      headers=forward_headers(request))
         if outcome == OK:
             status = 500  # stays 500 if the view raises
             try:

@@ -292,3 +292,72 @@ def test_catalog_calls_send_the_key_only_when_configured(monkeypatch):
     RestApiRequestMethods.get_request_with_params("https://catalog.test/restapi/rooms/", {"a": 1})
     RestApiRequestMethods.get_request_page("https://catalog.test/restapi/rooms/", 1, 10)
     assert seen[-3:] == [{"x-api-key": "catalog-key"}] * 3
+
+
+# --- Client forwarded to the Auth service -------------------------------------
+
+def test_forward_headers_are_sent_only_when_the_secret_is_configured(monkeypatch):
+    from flask import request
+
+    from SLL.auth_upstream import forward_headers
+
+    app = Flask(__name__)
+    with app.test_request_context("/", headers={"X-Forwarded-For": "198.51.100.20, 203.0.113.9"}):
+        monkeypatch.delenv("AUTH_FORWARD_KEY", raising=False)
+        assert forward_headers(request) == {}
+        monkeypatch.setenv("AUTH_FORWARD_KEY", "k")
+        monkeypatch.setenv("TRUSTED_PROXY_HOPS", "1")
+        assert forward_headers(request) == {"X-Client-IP": "203.0.113.9", "X-Forward-Key": "k"}
+        assert forward_headers() == {"X-Client-IP": "203.0.113.9", "X-Forward-Key": "k"}
+
+
+def test_forward_headers_outside_a_request_add_nothing(monkeypatch):
+    from SLL.auth_upstream import forward_headers
+
+    monkeypatch.setenv("AUTH_FORWARD_KEY", "k")
+    assert forward_headers() == {}
+
+
+def test_call_auth_passes_the_headers_to_the_request(monkeypatch):
+    seen = {}
+
+    def fake_get(url, params=None, timeout=None, headers=None):
+        seen["headers"] = headers
+        return FakeResponse(200)
+
+    monkeypatch.setattr("SLL.auth_upstream.requests.get", fake_get)
+    clock = Clock()
+    auth_upstream.call_auth("GET", URL, headers={"X-Client-IP": "1.2.3.4"}, sleep=clock.sleep, clock=clock)
+    assert seen["headers"] == {"X-Client-IP": "1.2.3.4"}
+
+
+def test_token_required_forwards_the_client_to_auth(monkeypatch):
+    captured = {}
+    monkeypatch.setenv("AUTH_FORWARD_KEY", "k")
+    monkeypatch.setattr("SLL.auth_decorators.call_auth",
+                        lambda *a, **kw: captured.update(kw) or (auth_upstream.OK, None))
+    app = Flask(__name__)
+
+    @app.route("/ping")
+    @token_required
+    def ping():
+        return "ok"
+
+    app.test_client().get("/ping", headers={"token": "t", "email": "a@udf.edu.br",
+                                            "X-Forwarded-For": "203.0.113.9"})
+    assert captured["headers"] == {"X-Client-IP": "203.0.113.9", "X-Forward-Key": "k"}
+
+
+def test_send_link_and_exchange_forward_the_client_too(monkeypatch):
+    from BLL.authentication import AuthenticationController
+
+    calls = []
+    monkeypatch.setenv("AUTH_FORWARD_KEY", "k")
+    monkeypatch.setattr("BLL.authentication.call_auth",
+                        lambda *a, **kw: calls.append(kw["headers"]) or (auth_upstream.UNAVAILABLE, None))
+    app = Flask(__name__)
+    with app.test_request_context("/", headers={"X-Forwarded-For": "203.0.113.9"}):
+        AuthenticationController.insert_token("user@udf.edu.br")
+        AuthenticationController.exchange_link("user@udf.edu.br", "t" * 43)
+        AuthenticationController.is_token_valid("t", "user@udf.edu.br")
+    assert calls == [{"X-Client-IP": "203.0.113.9", "X-Forward-Key": "k"}] * 3
