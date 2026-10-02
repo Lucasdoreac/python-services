@@ -12,6 +12,11 @@
         <form method="post" action="/{{ action }}">
             <input type="hidden" name="eventId" value="{{ event_id }}" />
             <input type="hidden" name="tokenId" value="{{ token_id }}" />
+            {% if action == "request_changes" %}
+            <label for="message">Descreva as alterações necessárias</label>
+            <textarea id="message" name="message" rows="6" maxlength="1000" required>{{ message or "" }}</textarea>
+            {% if error %}<p role="alert">{{ error }}</p>{% endif %}
+            {% endif %}
             <button type="submit">Confirmar</button>
         </form>
     </main>
