@@ -1,7 +1,7 @@
 
 import pytest
 import logging
-from src.SLL.py_log import AppLogger,LogType,Logmessage
+from src.SLL.py_log import AppLogger,LogType,Logmessage,mask_email
 from src import get_config
 
 
@@ -22,7 +22,7 @@ def teste_log_token_successfully(caplog):
     assert len(caplog.records) == 1
     log_record = caplog.records[0]
     assert log_record.levelname == "INFO"
-    expected_message = "Token validation failed; email: udf@udf.com; token: sha256:5994471a; IP: localhost;"
+    expected_message = f"Token validation failed; email: {mask_email('udf@udf.com')}; token: sha256:5994471a; IP: localhost;"
     assert  expected_message in log_record.message
 
 
@@ -113,7 +113,7 @@ def teste_invalid_email_domain_successfully(caplog):
     assert len(caplog.records) == 1
     log_record = caplog.records[0]
     assert log_record.levelname == "INFO"
-    expected_message = "Invalid email domain; email: udf@udf.com; IP: localhost;"
+    expected_message = f"Invalid email domain; email: {mask_email('udf@udf.com')}; IP: localhost;"
     assert expected_message in log_record.message
 
 
@@ -148,7 +148,7 @@ def teste_failed_send_email_successfully(caplog):
     assert len(caplog.records) == 1
     log_record = caplog.records[0]
     assert log_record.levelname == "INFO"
-    expected_message = "Email sender service unavailable: failed to send email; IP: localhost; Email: coord@example.edu;"
+    expected_message = f"Email sender service unavailable: failed to send email; IP: localhost; Email: {mask_email('coord@example.edu')};"
     assert expected_message in log_record.message
 
 
@@ -328,7 +328,7 @@ def teste_rooms_not_found(caplog):
 
 
 def test_tokens_never_reach_the_log_in_clear(caplog):
-    from SLL.py_log import mask_token
+    from SLL.py_log import mask_email, mask_token
 
     secret = "super-secret-token-value"
     with caplog.at_level("INFO"):
