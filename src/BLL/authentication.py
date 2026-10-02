@@ -6,6 +6,30 @@ from SLL import AppLogger, Logmessage, LogType
 from SLL.auth_upstream import OK, UNAVAILABLE, call_auth, forward_headers, unavailable_payload
 
 
+def json_passthrough(response) -> Response:
+    """Relay the Auth service's answer, always typed as JSON.
+
+    The Auth only speaks JSON. A body that is not JSON (a platform or proxy page) is never
+    relayed with the upstream ``Content-Type``, which would have the browser render it as
+    markup; it becomes a JSON 502 instead. An empty body (a 2xx with no content) is not JSON either,
+    so it becomes a 502 too. ``Retry-After`` from the Auth is passed through.
+    """
+    try:
+        response.json()
+    except (ValueError, AttributeError):
+        AppLogger.log(Logmessage.AUTH_SERVICE_UNAVAILABLE, LogType.ERROR, error="non-JSON answer")
+        return Response(
+            response=jsonify({"error": "Authentication service returned an unexpected answer"}).get_data(as_text=True),
+            status=502,
+            content_type="application/json",
+        )
+    relayed = Response(response=response.text, status=response.status_code, content_type="application/json")
+    retry_after = (getattr(response, "headers", None) or {}).get("Retry-After")
+    if retry_after:  # e.g. the Auth's 429: the client needs to know when to try again
+        relayed.headers["Retry-After"] = str(retry_after)
+    return relayed
+
+
 class AuthenticationController:
     _authentication_instance = None
 
@@ -38,12 +62,7 @@ class AuthenticationController:
                 )
 
             # Create a Flask response using the content and status code from the internal API
-            flask_response = Response(
-                response=response.text,
-                status=response.status_code,
-                content_type=response.headers.get('Content-Type', 'application/json')
-            )
-            return flask_response
+            return json_passthrough(response)
         except requests.exceptions.RequestException as e:
             AppLogger.log(Logmessage.AUTH_SERVICE_UNAVAILABLE, LogType.ERROR, error=str(e))
             return Response(
@@ -66,8 +85,4 @@ class AuthenticationController:
                 headers={"Retry-After": "10"},
                 content_type="application/json",
             )
-        return Response(
-            response=response.text,
-            status=response.status_code,
-            content_type=response.headers.get('Content-Type', 'application/json'),
-        )
+        return json_passthrough(response)
