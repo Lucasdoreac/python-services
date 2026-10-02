@@ -1,5 +1,7 @@
 import hashlib
+import hmac
 import logging
+import os
 import logging.config
 from enum import Enum
 from datetime import datetime
@@ -30,6 +32,7 @@ logging.basicConfig(level=logging.INFO, filename="py_log.log", filemode="a",
 
 
 class Logmessage(Enum):
+    REQUEST_AUTHENTICATED = "Authenticated request; email_hash: {email_hash}; method: {method}; path: {path}; status: {status}; IP: {ip_address};"
     API_KEY_VALIDATED = "API key validated; key: {api_key}; IP: {ip_address};"
     TOKEN_VALIDATED = "Token validated; email: {email}; token: {token}; IP: {ip_address};"
     TOKEN_FAILURE = "Token validation failed; email: {email}; token: {token}; IP: {ip_address};"
@@ -76,6 +79,30 @@ def mask_token(token) -> str:
     if not token:
         return "-"
     return "sha256:" + hashlib.sha256(str(token).encode()).hexdigest()[:8]
+
+
+_process_key = os.urandom(32)
+
+
+def _audit_key() -> bytes:
+    """Key for e-mail fingerprints, derived from INTERNAL_API_KEY (same pattern as the PDF links).
+
+    A bare SHA-256 of an institutional address can be reversed by guessing names, so the
+    fingerprint is keyed. Without INTERNAL_API_KEY (the API refuses to start without it) a
+    random per-process key is used: still correlatable within a run, never reversible.
+    """
+    internal = (os.getenv("INTERNAL_API_KEY") or "").strip()
+    if not internal:
+        return _process_key
+    return hmac.new(internal.encode("utf-8"), b"audit-email-v1", hashlib.sha256).digest()
+
+
+def mask_email(email) -> str:
+    """Short keyed fingerprint of an e-mail: tells callers apart without storing who they are."""
+    if not email:
+        return "-"
+    digest = hmac.new(_audit_key(), str(email).strip().lower().encode("utf-8"), hashlib.sha256).hexdigest()
+    return "hmac:" + digest[:12]
 
 
 class AppLogger:
