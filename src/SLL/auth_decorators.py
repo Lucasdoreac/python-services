@@ -2,7 +2,6 @@ import os
 from flask import request, jsonify, make_response
 from werkzeug.exceptions import HTTPException
 from functools import wraps
-from SLL import client_limits
 from SLL.auth_upstream import DENIED, OK, call_auth, unavailable_payload
 from SLL.py_log import AppLogger, LogType, Logmessage, mask_email
 
@@ -22,7 +21,6 @@ def token_required(f):
                 LogType.INFO,
                 token=token,
                 email=email,
-                ip_address=request.remote_addr,
             )
             return jsonify({"error": "Email missing"}) if not email else jsonify({"error": "Token missing"}) , 401
 
@@ -45,7 +43,6 @@ def token_required(f):
                     method=request.method,
                     path=request.path,
                     status=status,
-                    ip_address=client_limits.client_ip(request),
                 )
         if outcome == DENIED:
             AppLogger.log(
@@ -53,11 +50,9 @@ def token_required(f):
                 LogType.INFO,
                 token=token,
                 email=email,
-                ip_address=request.remote_addr,
             )
             return jsonify({"error": "Token validation failed"}), 403
-        AppLogger.log(Logmessage.AUTH_SERVICE_UNAVAILABLE, LogType.ERROR, email=email,
-                      ip_address=request.remote_addr)
+        AppLogger.log(Logmessage.AUTH_SERVICE_UNAVAILABLE, LogType.ERROR, email=email)
         response = jsonify(unavailable_payload(upstream))
         response.headers["Retry-After"] = "10"
         return response, 503

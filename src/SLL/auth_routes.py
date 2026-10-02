@@ -31,7 +31,6 @@ class AuthRoutes:
                 Logmessage.INVALID_EMAIL_DOMAIN,
                 LogType.INFO,
                 email=email,
-                ip_address=request.remote_addr,
             )
             return jsonify({'error': 'Invalid email domain'}), 400
 
@@ -64,7 +63,7 @@ class AuthRoutes:
     @swag_from(get_swagger_specification(path='auth', method='GET'))
     def validate_hash():
         AppLogger.log(Logmessage.TOKEN_VALIDATED, log_type=LogType.INFO, email=request.args.get('email'),
-                      token=request.args.get('token'), ip_address=f"{request.remote_addr}")
+                      token=request.args.get('token'))
         return jsonify(True), 200
 
 
