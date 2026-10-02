@@ -7,7 +7,7 @@ from .catalog_guard import ensure_catalog_awake
 from .auth_decorators import token_required
 from .swagger_docs import get_swagger_specification
 from SLL.py_log import AppLogger,LogType,Logmessage
-from .cluster_api.request_methods import GraphQlRequestMethods
+from .cluster_api.request_methods import GraphQlRequestMethods, catalog_headers
 
 resources_bp = Blueprint('resources', __name__)
 resources_bp.before_request(ensure_catalog_awake)
@@ -124,7 +124,7 @@ class ResourcesRoutes:
             if course_name:
                 url += f"?course_name={course_name}"
 
-            response = requests.get(url)
+            response = requests.get(url, headers=catalog_headers())
             response.raise_for_status()
 
             data = response.json()

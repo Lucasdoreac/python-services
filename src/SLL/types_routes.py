@@ -3,7 +3,7 @@ import requests
 from flask import Blueprint, jsonify, request
 from flasgger import swag_from
 
-from .cluster_api.request_methods import GraphQlRequestMethods
+from .cluster_api.request_methods import GraphQlRequestMethods, catalog_headers
 from . import AppLogger, Logmessage, LogType
 from .swagger_docs import get_swagger_specification
 from .catalog_guard import ensure_catalog_awake
@@ -23,7 +23,7 @@ class TypesRoutes:
         try:
             url_base = os.getenv('URL_restapi')
             url = f"{url_base}/types/"
-            response = requests.get(url)
+            response = requests.get(url, headers=catalog_headers())
             response.raise_for_status()
 
             data = response.json()  # Expected to be a list of objects
@@ -113,7 +113,7 @@ class TypesRoutes:
 
             url = f"{url_base}/types/?collection_name={collection}"
 
-            response = requests.get(url)
+            response = requests.get(url, headers=catalog_headers())
             response.raise_for_status()
 
             data = response.json()

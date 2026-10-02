@@ -5,6 +5,17 @@ import requests
 from SLL import AppLogger, Logmessage, LogType
 
 
+def catalog_headers():
+    """x-api-key for the Catalog service when CATALOG_API_KEY is configured.
+
+    The Catalog can require a key on its read endpoints
+    (REQUIRE_API_KEY_FOR_READS); sending it when set lets that be switched on
+    without code changes. Without the variable no header is added.
+    """
+    key = os.getenv("CATALOG_API_KEY")
+    return {"x-api-key": key} if key else {}
+
+
 class RestApiRequestMethods:
 
     @staticmethod
@@ -12,14 +23,14 @@ class RestApiRequestMethods:
         """
         Faz uma requisição GET com parâmetros para a API externa
         """
-        response = requests.get(url, params=params)
+        response = requests.get(url, params=params, headers=catalog_headers())
         if response.status_code != 200:
             raise Exception(f"Erro ao fazer requisição para {url}: {response.status_code}")
         return response
 
     @staticmethod
     def get_request_simple(url):
-        response = requests.get(url)
+        response = requests.get(url, headers=catalog_headers())
         if response.status_code != 200:
             raise Exception("Erro ao buscar dados do shared-resources")
         return response
@@ -27,7 +38,7 @@ class RestApiRequestMethods:
     
     @staticmethod
     def get_request_page(url, page_number, page_size):
-        response = requests.get(url, params={"page": page_number, "page_size": page_size})
+        response = requests.get(url, params={"page": page_number, "page_size": page_size}, headers=catalog_headers())
         if response.status_code != 200:
             raise Exception("Erro ao buscar dados do shared-resources")
         return response
@@ -62,7 +73,7 @@ class GraphQlRequestMethods:
                        }
                        }"""
 
-        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})
+        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query}, headers=catalog_headers())
         data = response.json()
         disciplines = data.get("disciplines", [])
         return disciplines
@@ -76,7 +87,7 @@ class GraphQlRequestMethods:
                     }
                     }"""
 
-        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})
+        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query}, headers=catalog_headers())
         data = response.json()
         periods = data.get("periods", [])
         return periods
@@ -100,7 +111,7 @@ class GraphQlRequestMethods:
                         }"""
 
 
-        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})
+        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query}, headers=catalog_headers())
         data = response.json()
         teachers = data.get("teachers", [])
         return teachers
@@ -117,7 +128,7 @@ class GraphQlRequestMethods:
                   }
                 }"""
 
-        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})
+        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query}, headers=catalog_headers())
         data = response.json()
         rooms = data.get("rooms", [])
         return rooms
@@ -134,7 +145,7 @@ class GraphQlRequestMethods:
         }
         """
 
-        response = requests.post(f"{os.getenv('URL_graph')}", json = {"query":query})
+        response = requests.post(f"{os.getenv('URL_graph')}", json = {"query":query}, headers=catalog_headers())
         data = response.json()
         campus = data.get("campus",[])
         return campus
@@ -151,7 +162,7 @@ class GraphQlRequestMethods:
                       }                    
                     }"""
 
-        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})
+        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query}, headers=catalog_headers())
         data = response.json()
         types = data.get("types", [])
         return types
@@ -192,7 +203,7 @@ class GraphQlRequestMethods:
         """
 
 
-        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})
+        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query}, headers=catalog_headers())
         data = response.json()
         types = data.get("types", [])
         return types
@@ -216,7 +227,7 @@ class GraphQlRequestMethods:
         """
 
 
-        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})
+        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query}, headers=catalog_headers())
         data = response.json()
         room = data.get("rooms", [])
         return room
@@ -244,7 +255,7 @@ class GraphQlRequestMethods:
             raise Exception("ID de curso não informado ou nulo!")
 
 
-        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})
+        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query}, headers=catalog_headers())
         data = response.json()
         course = data.get("courses", [])
         return course
@@ -272,7 +283,7 @@ class GraphQlRequestMethods:
             raise Exception("ID de professor não informado ou nulo!")
 
 
-        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query})
+        response = requests.post(f"{os.getenv('URL_graph')}", json={"query": query}, headers=catalog_headers())
         data = response.json()
         teachers = data.get("teachers", [])
         return teachers

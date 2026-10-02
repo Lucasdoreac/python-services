@@ -261,3 +261,34 @@ def test_no_probe_without_catalog_url(monkeypatch):
     catalog_guard.reset()
     monkeypatch.delenv("URL_restapi", raising=False)
     assert catalog_guard.ensure_catalog_awake() is None
+
+
+# --- Catalog API key ---------------------------------------------------------
+
+def test_catalog_calls_send_the_key_only_when_configured(monkeypatch):
+    from SLL.cluster_api.request_methods import GraphQlRequestMethods, RestApiRequestMethods
+
+    seen = []
+
+    class Ok:
+        status_code = 200
+
+        def json(self):
+            return {"data": {}}
+
+    monkeypatch.setattr("SLL.cluster_api.request_methods.requests.get",
+                        lambda url, **kw: seen.append(kw.get("headers")) or Ok())
+    monkeypatch.setattr("SLL.cluster_api.request_methods.requests.post",
+                        lambda url, **kw: seen.append(kw.get("headers")) or Ok())
+    monkeypatch.setenv("URL_restapi", "https://catalog.test/restapi")
+    monkeypatch.setenv("URL_graph", "https://catalog.test/graphql/")
+
+    monkeypatch.delenv("CATALOG_API_KEY", raising=False)
+    RestApiRequestMethods.get_request_simple("https://catalog.test/restapi/rooms/")
+    assert seen[-1] == {}
+
+    monkeypatch.setenv("CATALOG_API_KEY", "catalog-key")
+    RestApiRequestMethods.get_request_simple("https://catalog.test/restapi/rooms/")
+    RestApiRequestMethods.get_request_with_params("https://catalog.test/restapi/rooms/", {"a": 1})
+    RestApiRequestMethods.get_request_page("https://catalog.test/restapi/rooms/", 1, 10)
+    assert seen[-3:] == [{"x-api-key": "catalog-key"}] * 3
