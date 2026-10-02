@@ -168,7 +168,7 @@ class FlowController:
         except Exception as e:
             from SLL.py_log import AppLogger, LogType
             AppLogger.log(
-                f"Erro ao buscar campus: {str(e)}",
+                f"Erro ao buscar campus: {type(e).__name__}",
                 LogType.ERROR,
             )
             return []
