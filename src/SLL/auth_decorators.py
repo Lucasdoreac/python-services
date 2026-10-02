@@ -1,7 +1,7 @@
 import os
 from flask import request, jsonify
 from functools import wraps
-from SLL.auth_upstream import DENIED, OK, call_auth, unavailable_payload
+from SLL.auth_upstream import DENIED, OK, call_auth, forward_headers, unavailable_payload
 from SLL.py_log import AppLogger, LogType, Logmessage
 
 
@@ -24,7 +24,8 @@ def token_required(f):
             )
             return jsonify({"error": "Email missing"}) if not email else jsonify({"error": "Token missing"}) , 401
 
-        outcome, upstream = call_auth("GET", url, params={"email": email, "token": token})
+        outcome, upstream = call_auth("GET", url, params={"email": email, "token": token},
+                                      headers=forward_headers(request))
         if outcome == OK:
             return f(*args, **kwargs)
         if outcome == DENIED:

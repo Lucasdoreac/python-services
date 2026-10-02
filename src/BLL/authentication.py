@@ -3,7 +3,7 @@ import requests
 from flask import Response, jsonify
 
 from SLL import AppLogger, Logmessage, LogType
-from SLL.auth_upstream import OK, UNAVAILABLE, call_auth, unavailable_payload
+from SLL.auth_upstream import OK, UNAVAILABLE, call_auth, forward_headers, unavailable_payload
 
 
 class AuthenticationController:
@@ -17,7 +17,8 @@ class AuthenticationController:
     @staticmethod
     def is_token_valid(token: str, email: str) -> bool:
         url = f"{os.getenv('URL_AUTH')}/auth/validate"
-        outcome, _ = call_auth("GET", url, params={"email": email, "token": token})
+        outcome, _ = call_auth("GET", url, params={"email": email, "token": token},
+                                  headers=forward_headers())
         return outcome == OK
 
     @staticmethod
@@ -26,7 +27,7 @@ class AuthenticationController:
         try:
             # Make the request to the internal authentication API
             outcome, response = call_auth("POST", url, params={"email": email},
-                                          retry_read_timeouts=False)
+                                          headers=forward_headers(), retry_read_timeouts=False)
             if outcome == UNAVAILABLE:
                 AppLogger.log(Logmessage.AUTH_SERVICE_UNAVAILABLE, LogType.ERROR, email=email)
                 return Response(
@@ -56,7 +57,7 @@ class AuthenticationController:
         """Trade the e-mailed link token for a session token at the Auth service."""
         url = f"{os.getenv('URL_AUTH')}/auth/exchange"
         outcome, response = call_auth("POST", url, json={"email": email, "token": token},
-                                      retry_read_timeouts=False)
+                                      headers=forward_headers(), retry_read_timeouts=False)
         if outcome == UNAVAILABLE:
             AppLogger.log(Logmessage.AUTH_SERVICE_UNAVAILABLE, LogType.ERROR, email=email)
             return Response(
