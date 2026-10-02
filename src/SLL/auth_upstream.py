@@ -86,7 +86,7 @@ def _note(method, url, attempt, outcome, response=None):
     print(f"auth_upstream: {method} host={urlsplit(url).netloc} attempt={attempt} transient={outcome}{extra}", flush=True)
 
 
-def call_auth(method, url, *, params=None, retry_read_timeouts=True,
+def call_auth(method, url, *, params=None, json=None, retry_read_timeouts=True,
               sleep=None, clock=None):
     """Return ``(outcome, response)``; ``response`` is None when unavailable.
 
@@ -104,10 +104,10 @@ def call_auth(method, url, *, params=None, retry_read_timeouts=True,
         if remaining <= 0:
             return UNAVAILABLE, last
         try:
-            response = getattr(requests, method.lower())(
-                url, params=params,
-                timeout=(CONNECT_TIMEOUT, min(15.0, remaining)),
-            )
+            kwargs = {"params": params, "timeout": (CONNECT_TIMEOUT, min(15.0, remaining))}
+            if json is not None:
+                kwargs["json"] = json
+            response = getattr(requests, method.lower())(url, **kwargs)
         except requests.exceptions.ConnectionError as error:
             _note(method, url, attempt, type(error).__name__)
             last = None

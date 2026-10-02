@@ -92,3 +92,68 @@ def test_invalid_domains_do_not_consume_the_budget(monkeypatch):
     assert client.post("/auth/send-link?email=ok@udf.edu.br",
                        headers={"X-Forwarded-For": "203.0.113.5"}).status_code == 201
 
+
+
+# --- link exchange ----------------------------------------------------------------------
+
+def exchange_client(monkeypatch, outcome):
+    import SLL.auth_routes as routes
+    import BLL.authentication as bll
+
+    client_limits.reset()
+    seen = []
+
+    class Upstream:
+        status_code = 200
+        text = '{"token": "session-token"}'
+        headers = {"Content-Type": "application/json"}
+
+    def fake_call(method, url, **kwargs):
+        seen.append((method, url, kwargs))
+        return outcome, Upstream()
+
+    monkeypatch.setattr(bll, "call_auth", fake_call)
+    monkeypatch.setenv("URL_AUTH", "https://auth.test")
+    app = Flask(__name__)
+    app.register_blueprint(routes.auth_bp)
+    return app.test_client(), seen
+
+
+def test_exchange_forwards_the_link_in_the_body_not_the_url(monkeypatch):
+    client, seen = exchange_client(monkeypatch, "ok")
+    response = client.post("/auth/exchange", json={"email": "u@udf.edu.br", "token": "L" * 43})
+    assert response.status_code == 200 and response.get_json() == {"token": "session-token"}
+    method, url, kwargs = seen[0]
+    assert (method, url) == ("POST", "https://auth.test/auth/exchange")
+    assert kwargs["json"] == {"email": "u@udf.edu.br", "token": "L" * 43} and not kwargs.get("params")
+    assert kwargs["retry_read_timeouts"] is False
+
+
+def test_exchange_validates_the_body(monkeypatch):
+    client, seen = exchange_client(monkeypatch, "ok")
+    for body in ({}, {"email": "u@udf.edu.br"}, {"token": "x"}, {"email": "u@udf.edu.br", "token": 5}):
+        assert client.post("/auth/exchange", json=body).status_code == 400
+    assert client.post("/auth/exchange", data="nope").status_code == 400
+    assert seen == []
+
+
+def test_exchange_answers_503_with_wake_url_when_auth_sleeps(monkeypatch):
+    import BLL.authentication as bll
+
+    client, seen = exchange_client(monkeypatch, "unavailable")
+
+    class Asleep:
+        status_code = 502
+        headers = {"x-render-routing": "no-deploy"}
+        text = ""
+
+    monkeypatch.setattr(bll, "call_auth", lambda *a, **k: ("unavailable", Asleep()))
+    response = client.post("/auth/exchange", json={"email": "u@udf.edu.br", "token": "L" * 43})
+    assert response.status_code == 503 and response.get_json()["wake_url"] == "https://auth.test/health"
+
+
+def test_exchange_is_limited_per_client(monkeypatch):
+    client, seen = exchange_client(monkeypatch, "ok")
+    codes = [client.post("/auth/exchange", json={"email": "u@udf.edu.br", "token": "L" * 43},
+                         headers={"X-Forwarded-For": "203.0.113.7"}).status_code for _ in range(62)]
+    assert codes[:60] == [200] * 60 and codes[60:] == [429, 429]

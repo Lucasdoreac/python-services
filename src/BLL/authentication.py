@@ -50,3 +50,23 @@ class AuthenticationController:
                 status=503,
                 content_type="application/json"
             )
+
+    @staticmethod
+    def exchange_link(email: str, token: str) -> Response:
+        """Trade the e-mailed link token for a session token at the Auth service."""
+        url = f"{os.getenv('URL_AUTH')}/auth/exchange"
+        outcome, response = call_auth("POST", url, json={"email": email, "token": token},
+                                      retry_read_timeouts=False)
+        if outcome == UNAVAILABLE:
+            AppLogger.log(Logmessage.AUTH_SERVICE_UNAVAILABLE, LogType.ERROR, email=email)
+            return Response(
+                response=jsonify(unavailable_payload(response)).get_data(as_text=True),
+                status=503,
+                headers={"Retry-After": "10"},
+                content_type="application/json",
+            )
+        return Response(
+            response=response.text,
+            status=response.status_code,
+            content_type=response.headers.get('Content-Type', 'application/json'),
+        )
