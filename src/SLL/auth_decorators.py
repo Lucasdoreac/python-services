@@ -1,7 +1,7 @@
-import requests
 import os
 from flask import request, jsonify
 from functools import wraps
+from SLL.auth_upstream import DENIED, OK, call_auth, unavailable_payload
 from SLL.py_log import AppLogger, LogType, Logmessage
 
 
@@ -24,11 +24,10 @@ def token_required(f):
             )
             return jsonify({"error": "Email missing"}) if not email else jsonify({"error": "Token missing"}) , 401
 
-        response = requests.get(url, params={"email": email,
-                                             "token": token})
-        if response:
+        outcome, upstream = call_auth("GET", url, params={"email": email, "token": token})
+        if outcome == OK:
             return f(*args, **kwargs)
-        else:
+        if outcome == DENIED:
             AppLogger.log(
                 Logmessage.TOKEN_FAILURE,
                 LogType.INFO,
@@ -37,5 +36,10 @@ def token_required(f):
                 ip_address=request.remote_addr,
             )
             return jsonify({"error": "Token validation failed"}), 403
-          
+        AppLogger.log(Logmessage.AUTH_SERVICE_UNAVAILABLE, LogType.ERROR, email=email,
+                      ip_address=request.remote_addr)
+        response = jsonify(unavailable_payload(upstream))
+        response.headers["Retry-After"] = "10"
+        return response, 503
+
     return decorated_function

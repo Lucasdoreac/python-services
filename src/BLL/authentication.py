@@ -3,6 +3,7 @@ import requests
 from flask import Response, jsonify
 
 from SLL import AppLogger, Logmessage, LogType
+from SLL.auth_upstream import OK, UNAVAILABLE, call_auth, unavailable_payload
 
 
 class AuthenticationController:
@@ -16,17 +17,24 @@ class AuthenticationController:
     @staticmethod
     def is_token_valid(token: str, email: str) -> bool:
         url = f"{os.getenv('URL_AUTH')}/auth/validate"
-        response = requests.get(url, params={"email": email, "token": token})
-        if response.status_code == 200:
-            return True
-        return False
+        outcome, _ = call_auth("GET", url, params={"email": email, "token": token})
+        return outcome == OK
 
     @staticmethod
     def insert_token(email: str) -> Response:
         url = f"{os.getenv('URL_AUTH')}/auth/send-link"
         try:
             # Make the request to the internal authentication API
-            response = requests.post(url, params={"email": email})
+            outcome, response = call_auth("POST", url, params={"email": email},
+                                          retry_read_timeouts=False)
+            if outcome == UNAVAILABLE:
+                AppLogger.log(Logmessage.AUTH_SERVICE_UNAVAILABLE, LogType.ERROR, email=email)
+                return Response(
+                    response=jsonify(unavailable_payload(response)).get_data(as_text=True),
+                    status=503,
+                    headers={"Retry-After": "10"},
+                    content_type="application/json",
+                )
 
             # Create a Flask response using the content and status code from the internal API
             flask_response = Response(

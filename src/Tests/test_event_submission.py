@@ -46,7 +46,7 @@ def client(monkeypatch):
     bll_index.types_repository = TypesRepository()
     bll_index.reservations_repository = ReservationsRepository()
     bll_index.events_repository = bll_index.EventsRepository()
-    monkeypatch.setattr("SLL.auth_decorators.requests.get", lambda *args, **kwargs: True)
+    monkeypatch.setattr("SLL.auth_upstream.requests.get", lambda *args, **kwargs: True)
     app = create_app(get_config())
     monkeypatch.setattr("SLL.events_routes.pdf.generate_event_pdf", lambda **kwargs: None)
     monkeypatch.setattr("SLL.events_routes.send_to_coordenacao", lambda **kwargs: None)
