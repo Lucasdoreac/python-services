@@ -1,4 +1,4 @@
-FROM python:3.14.7-slim AS builder
+FROM python:3.14.8-slim AS builder
 
 ENV POETRY_VERSION=2.4.1 \
     POETRY_NO_INTERACTION=1 \
@@ -13,7 +13,7 @@ COPY pyproject.toml poetry.lock ./
 RUN poetry install --only main --no-root --no-ansi \
     && rm -rf /app/.venv/lib/python3.14/site-packages/pip* /app/.venv/bin/pip*
 
-FROM python:3.14.7-slim AS runtime
+FROM python:3.14.8-slim AS runtime
 
 ARG DEBIAN_FRONTEND=noninteractive
 
