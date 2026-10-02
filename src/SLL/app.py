@@ -6,6 +6,8 @@ from .swagger_docs import get_swagger_specification
 
 # App Factory
 def create_app(config_class):
+    from .startup_checks import require_internal_api_key
+    require_internal_api_key()
     app = Flask(__name__)
     swagger = Swagger(app)
     app.config.from_object(config_class)

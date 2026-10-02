@@ -283,11 +283,11 @@ def test_catalog_calls_send_the_key_only_when_configured(monkeypatch):
     monkeypatch.setenv("URL_restapi", "https://catalog.test/restapi")
     monkeypatch.setenv("URL_graph", "https://catalog.test/graphql/")
 
-    monkeypatch.delenv("CATALOG_API_KEY", raising=False)
+    monkeypatch.delenv("INTERNAL_API_KEY", raising=False)
     RestApiRequestMethods.get_request_simple("https://catalog.test/restapi/rooms/")
     assert seen[-1] == {}
 
-    monkeypatch.setenv("CATALOG_API_KEY", "catalog-key")
+    monkeypatch.setenv("INTERNAL_API_KEY", "catalog-key")
     RestApiRequestMethods.get_request_simple("https://catalog.test/restapi/rooms/")
     RestApiRequestMethods.get_request_with_params("https://catalog.test/restapi/rooms/", {"a": 1})
     RestApiRequestMethods.get_request_page("https://catalog.test/restapi/rooms/", 1, 10)

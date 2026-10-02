@@ -6,13 +6,13 @@ from SLL import AppLogger, Logmessage, LogType
 
 
 def catalog_headers():
-    """x-api-key for the Catalog service when CATALOG_API_KEY is configured.
+    """x-api-key for the Catalog service, from INTERNAL_API_KEY.
 
-    The Catalog can require a key on its read endpoints
-    (REQUIRE_API_KEY_FOR_READS); sending it when set lets that be switched on
-    without code changes. Without the variable no header is added.
+    The Catalog requires a key on /restapi and /graphql; the API refuses to
+    start without one (see startup_checks), so the empty case only happens
+    under the development opt-out.
     """
-    key = os.getenv("CATALOG_API_KEY")
+    key = os.getenv("INTERNAL_API_KEY")
     return {"x-api-key": key} if key else {}
 
 

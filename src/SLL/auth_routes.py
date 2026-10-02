@@ -7,8 +7,12 @@ from SLL.auth_decorators import token_required
 from BLL import AuthenticationController
 from SLL.py_log import AppLogger,LogType,Logmessage
 from SLL.email_policy import is_email_allowed
+from SLL import client_limits
 
 auth_bp = Blueprint('auth', __name__)
+
+
+SEND_LINK_PER_CLIENT = 10
 
 
 class AuthRoutes:
@@ -29,6 +33,11 @@ class AuthRoutes:
                 ip_address=request.remote_addr,
             )
             return jsonify({'error': 'Invalid email domain'}), 400
+
+        if client_limits.hit(f"send-link:{client_limits.client_ip(request)}") > SEND_LINK_PER_CLIENT:
+            response = jsonify({'error': 'Too many requests; try again later'})
+            response.headers['Retry-After'] = str(client_limits.window_seconds())
+            return response, 429
 
         return authentication_controller.insert_token(email)
 
