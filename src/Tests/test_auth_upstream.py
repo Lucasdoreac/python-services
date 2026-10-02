@@ -361,3 +361,69 @@ def test_send_link_and_exchange_forward_the_client_too(monkeypatch):
         AuthenticationController.exchange_link("user@udf.edu.br", "t" * 43)
         AuthenticationController.is_token_valid("t", "user@udf.edu.br")
     assert calls == [{"X-Client-IP": "203.0.113.9", "X-Forward-Key": "k"}] * 3
+
+
+# --- Auth pass-through is always JSON ---------------------------------------------
+
+class UpstreamAnswer:
+    def __init__(self, text, content_type, status_code=201, headers=None):
+        self.text = text
+        self.status_code = status_code
+        self.headers = {"Content-Type": content_type, **(headers or {})}
+
+    def json(self):
+        import json
+        return json.loads(self.text)
+
+
+@pytest.mark.parametrize("operation", ["insert_token", "exchange_link"])
+def test_an_html_answer_from_the_auth_is_never_relayed_as_markup(monkeypatch, operation):
+    from BLL.authentication import AuthenticationController
+
+    html = "<html><script>alert(1)</script></html>"
+    monkeypatch.setattr("BLL.authentication.call_auth",
+                        lambda *a, **kw: (auth_upstream.OK, UpstreamAnswer(html, "text/html")))
+    app = Flask(__name__)
+    with app.test_request_context():
+        args = ("user@udf.edu.br",) if operation == "insert_token" else ("user@udf.edu.br", "t" * 43)
+        response = getattr(AuthenticationController, operation)(*args)
+    assert response.status_code == 502
+    assert response.content_type == "application/json"
+    assert b"<script>" not in response.data
+
+
+@pytest.mark.parametrize("operation", ["insert_token", "exchange_link"])
+def test_a_json_answer_is_relayed_typed_as_json_whatever_the_upstream_header(monkeypatch, operation):
+    from BLL.authentication import AuthenticationController
+
+    monkeypatch.setattr("BLL.authentication.call_auth",
+                        lambda *a, **kw: (auth_upstream.OK, UpstreamAnswer('{"token": "abc"}', "text/html")))
+    app = Flask(__name__)
+    with app.test_request_context():
+        args = ("user@udf.edu.br",) if operation == "insert_token" else ("user@udf.edu.br", "t" * 43)
+        response = getattr(AuthenticationController, operation)(*args)
+    assert response.status_code == 201
+    assert response.content_type == "application/json"
+    assert response.get_json() == {"token": "abc"}
+
+
+def test_retry_after_from_the_auth_is_passed_through(monkeypatch):
+    from BLL.authentication import AuthenticationController
+
+    answer = UpstreamAnswer('{"error": "Too many requests; try again later"}', "application/json", 429, {"Retry-After": "900"})
+    monkeypatch.setattr("BLL.authentication.call_auth", lambda *a, **kw: (auth_upstream.DENIED, answer))
+    with Flask(__name__).test_request_context():
+        response = AuthenticationController.insert_token("user@udf.edu.br")
+    assert response.status_code == 429
+    assert response.headers["Retry-After"] == "900"
+
+
+@pytest.mark.parametrize("body", ["", "   "])
+def test_an_empty_2xx_from_the_auth_becomes_a_502(monkeypatch, body):
+    from BLL.authentication import AuthenticationController
+
+    monkeypatch.setattr("BLL.authentication.call_auth",
+                        lambda *a, **kw: (auth_upstream.OK, UpstreamAnswer(body, "application/json", 204)))
+    with Flask(__name__).test_request_context():
+        response = AuthenticationController.exchange_link("user@udf.edu.br", "t" * 43)
+    assert response.status_code == 502 and response.content_type == "application/json"
