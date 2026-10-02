@@ -21,7 +21,6 @@ class ReservationRoutes:
         AppLogger.log(
             Logmessage.RESERVATION_NOT_FOUND,
             LogType.INFO,
-            ip_address=request.remote_addr,
         )
         return jsonify({"error": "Reservation not found"}), 404
 
@@ -35,7 +34,6 @@ class ReservationRoutes:
             AppLogger.log(
             "Parâmetro eventId não informado.",
                     LogType.WARNING,
-                    ip_address=request.remote_addr,
             )
             return jsonify({'error': 'Parâmetro eventId é obrigatório'}), 400
 
@@ -44,7 +42,6 @@ class ReservationRoutes:
             AppLogger.log(
                 Logmessage.RESERVATION_NOT_FOUND,
                 LogType.INFO,
-                ip_address=request.remote_addr,
             )
             return jsonify({'error': 'Events not found'}), 404
 

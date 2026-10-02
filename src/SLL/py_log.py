@@ -8,6 +8,10 @@ import logging.config
 from enum import Enum
 from datetime import datetime
 
+from flask import has_request_context, request
+
+from SLL import client_limits
+
 # types of errors=
 # Invalid or missing credentials
 # Invalid or missing API key
@@ -147,6 +151,10 @@ class AppLogger:
         for secret in ("token", "api_key"):
             if secret in kwargs:
                 kwargs[secret] = mask_token(kwargs[secret])
+        if "ip_address" not in kwargs and has_request_context():
+            # One place decides the client address: behind the platform proxy
+            # remote_addr is the proxy, so ask client_limits (TRUSTED_PROXY_HOPS).
+            kwargs["ip_address"] = client_limits.client_ip(request)
         try:
             current_date = datetime.timestamp(datetime.now())
             timestamp = datetime.timestamp(datetime.now())
