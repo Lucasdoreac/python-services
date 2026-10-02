@@ -125,3 +125,23 @@ def test_notify_reservation_needs_a_token_and_the_organizer(client, monkeypatch)
     monkeypatch.delenv("FLASK_ENV", raising=False)
     ok = client.get(f"/notify_reservation?eventId={event_id}", headers=headers(OWNER))
     assert ok.status_code == 200 and calls == [event_id]
+
+
+# --- error details ------------------------------------------------------------------
+
+def test_upstream_failures_do_not_leak_details(client, monkeypatch):
+    import requests
+
+    monkeypatch.setenv("URL_restapi", "http://internal-catalog.hidden/restapi")
+
+    def boom(url, *args, **kwargs):
+        if "internal-catalog.hidden" in url:
+            raise requests.exceptions.RequestException("could not reach internal-catalog.hidden:5081")
+        return True  # the Auth check
+
+    monkeypatch.setattr("requests.get", boom)
+    for path in ("/types", "/courses"):
+        response = client.get(path, headers=headers(OWNER))
+        assert response.status_code == 502
+        assert "internal-catalog" not in response.get_data(as_text=True)
+        assert "details" not in response.get_json()

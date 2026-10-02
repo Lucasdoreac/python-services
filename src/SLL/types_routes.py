@@ -1,3 +1,4 @@
+import logging
 import os
 import requests
 from flask import Blueprint, jsonify, request
@@ -67,7 +68,8 @@ class TypesRoutes:
             return jsonify({'error': "Type not found"}), 404
 
         except requests.exceptions.RequestException as e:
-            return jsonify({'error': 'Failed to fetch data from external API.', 'details': str(e)}), 502
+            logging.getLogger(__name__).warning('Catalog request failed: %s', type(e).__name__)
+            return jsonify({'error': 'Failed to fetch data from external API.'}), 502
         except ValueError:
             return jsonify({'error': 'Invalid JSON response from external API.'}), 500
 
@@ -131,7 +133,8 @@ class TypesRoutes:
 
         except requests.exceptions.RequestException as e:
             # Handle errors in the external API call
-            return jsonify({'error': 'Failed to fetch data from external API.', 'details': str(e)}), 502
+            logging.getLogger(__name__).warning('Catalog request failed: %s', type(e).__name__)
+            return jsonify({'error': 'Failed to fetch data from external API.'}), 502
         except ValueError:
             # Handle invalid JSON responses
             return jsonify({'error': 'Invalid JSON response from external API.'}), 500

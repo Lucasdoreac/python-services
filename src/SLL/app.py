@@ -8,8 +8,11 @@ from .swagger_docs import get_swagger_specification
 def create_app(config_class):
     from .startup_checks import require_internal_api_key
     require_internal_api_key()
+    from .security_headers import apply_security_headers, docs_enabled
     app = Flask(__name__)
-    swagger = Swagger(app)
+    if docs_enabled():
+        Swagger(app)
+    app.after_request(apply_security_headers)
     app.config.from_object(config_class)
     CORS(app)
 

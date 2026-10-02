@@ -123,4 +123,4 @@ def notify_reservation():
             else:
                 return jsonify({'success': False, 'message': 'Falha ao enviar email'}), 500
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'An unexpected error occurred'}), 500

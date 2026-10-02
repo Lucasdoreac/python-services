@@ -245,7 +245,7 @@ class EventsRoutes:
         except ReservationConflict as error:
             return jsonify({'error': str(error)}), 409
         except ValueError as error:
-            return jsonify({'error': f'Invalid data format: {error}'}), 400
+            return jsonify({'error': 'Invalid data format'}), 400
 
         result = update_and_start_approval(event_id, data)
         if _status_code(result) >= 400 and reservation is not None:
