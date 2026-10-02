@@ -3,12 +3,14 @@ from flask import Blueprint, jsonify, request
 from flasgger import swag_from
 import os
 from BLL import FlowController
+from .catalog_guard import ensure_catalog_awake
 from .auth_decorators import token_required
 from .swagger_docs import get_swagger_specification
 from SLL.py_log import AppLogger,LogType,Logmessage
 from .cluster_api.request_methods import GraphQlRequestMethods
 
 resources_bp = Blueprint('resources', __name__)
+resources_bp.before_request(ensure_catalog_awake)
 
 
 

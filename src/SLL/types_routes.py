@@ -6,10 +6,12 @@ from flasgger import swag_from
 from .cluster_api.request_methods import GraphQlRequestMethods
 from . import AppLogger, Logmessage, LogType
 from .swagger_docs import get_swagger_specification
+from .catalog_guard import ensure_catalog_awake
 from .auth_decorators import token_required
 
 
 types_bp = Blueprint('types', __name__)
+types_bp.before_request(ensure_catalog_awake)
 
 
 class TypesRoutes:

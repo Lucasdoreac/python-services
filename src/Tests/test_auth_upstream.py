@@ -205,3 +205,59 @@ def test_send_link_returns_503_with_wake_url(monkeypatch):
         response = AuthenticationController.insert_token("user@udf.edu.br")
     assert response.status_code == 503
     assert b"http://auth.test/health" in response.data
+
+
+# --- Catalog guard -----------------------------------------------------------
+
+def catalog_client(monkeypatch, responses):
+    from SLL import catalog_guard
+
+    catalog_guard.reset()
+    monkeypatch.setenv("URL_restapi", "https://catalog.test/restapi")
+    probes = []
+
+    def fake_get(url, timeout=None, **kwargs):
+        probes.append(url)
+        result = responses[min(len(probes) - 1, len(responses) - 1)]
+        if isinstance(result, Exception):
+            raise result
+        return FakeResponse(*result)
+
+    monkeypatch.setattr("SLL.catalog_guard.requests.get", fake_get)
+    app = Flask(__name__)
+    app.before_request(catalog_guard.ensure_catalog_awake)
+
+    @app.route("/types")
+    def types():
+        return "ok"
+
+    return app.test_client(), probes
+
+
+def test_sleeping_catalog_gets_503_with_wake_url(monkeypatch):
+    client, probes = catalog_client(monkeypatch, [ASLEEP])
+    response = client.get("/types")
+    assert response.status_code == 503
+    assert response.get_json()["wake_url"] == "https://catalog.test/health"
+    assert response.headers["Retry-After"] == "10"
+    assert probes == ["https://catalog.test/health"]
+
+
+def test_awake_catalog_is_probed_once_then_remembered(monkeypatch):
+    client, probes = catalog_client(monkeypatch, [(404, "text/html; charset=utf-8", None)])
+    assert client.get("/types").data == b"ok"
+    assert client.get("/types").data == b"ok"
+    assert len(probes) == 1
+
+
+def test_probe_errors_do_not_block_the_route(monkeypatch):
+    client, probes = catalog_client(monkeypatch, [requests.exceptions.ConnectionError()])
+    assert client.get("/types").data == b"ok"
+
+
+def test_no_probe_without_catalog_url(monkeypatch):
+    from SLL import catalog_guard
+
+    catalog_guard.reset()
+    monkeypatch.delenv("URL_restapi", raising=False)
+    assert catalog_guard.ensure_catalog_awake() is None
