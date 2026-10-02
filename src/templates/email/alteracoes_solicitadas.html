@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <title>Alterações solicitadas</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f9f9f9; margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: auto; background: #fff; border: 1px solid #ddd; padding: 20px; }
+        .header { background: #0D5580; color: #fff; padding: 10px; margin: -20px -20px 20px; text-align: center; }
+        .header h1 { margin: 0; }
+        .request { background: #f4f6f8; border-left: 4px solid #0D5580; padding: 12px; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header"><h1>Alterações solicitadas</h1></div>
+        <p>A Coordenação pediu alterações no evento <strong>{{ event_name }}</strong> antes de aprová-lo:</p>
+        <p class="request">{{ message }}</p>
+        <p>Faça as alterações e envie o evento de novo para aprovação.</p>
+        {% if my_events_link %}
+        <p><a href="{{ my_events_link }}">Abrir Meus eventos</a></p>
+        {% endif %}
+    </div>
+</body>
+</html>
