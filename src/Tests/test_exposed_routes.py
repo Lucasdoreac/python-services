@@ -26,7 +26,9 @@ def test_a_tampered_or_expired_link_is_rejected():
     now = time.time()
     query = dict(p.split("=") for p in signed_links.signed_query("evt-1", now=now).split("&"))
     assert not signed_links.verify("evt-1", int(query["exp"]) + 60, query["sig"])
-    assert not signed_links.verify("evt-1", query["exp"], query["sig"][:-1] + "0")
+    flipped = query["sig"][:-1] + ("1" if query["sig"][-1] == "0" else "0")  # always a different signature
+    assert flipped != query["sig"]
+    assert not signed_links.verify("evt-1", query["exp"], flipped)
     assert not signed_links.verify("evt-1", query["exp"], "")
     assert not signed_links.verify("evt-1", "not-a-number", query["sig"])
     assert not signed_links.verify("evt-1", None, None)
