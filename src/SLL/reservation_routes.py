@@ -11,24 +11,6 @@ reservation_bp = Blueprint('reservation_bp', __name__)
 
 class ReservationRoutes:
     @staticmethod
-    @reservation_bp.route('/reservations', methods=['POST'])
-    @token_required
-    @swag_from(get_swagger_specification(path='reservations', method='POST'))
-    def post_reservation():
-        data = request.json
-        if not data:
-            AppLogger.log(
-                Logmessage.MISSING_DATA,
-                LogType.INFO,
-                ip_address=request.remote_addr,
-            )
-            return jsonify({'error': 'Missing date'}), 400
-
-        if FlowController.is_reserved(data['reservationDate'], data["roomId"]):
-            return jsonify({'error': 'Room already reserved for this time'}), 400
-        return FlowController.register_reservation_from_json(data)
-
-    @staticmethod
     @reservation_bp.route('/reservations/<string:date>', methods=['GET'])
     @token_required
     @swag_from(get_swagger_specification(path='reservations', method='GET', resource='date'))

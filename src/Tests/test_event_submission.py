@@ -175,11 +175,11 @@ def test_conflict_returns_409_without_submitting_second_event(client):
 def test_retry_reuses_existing_active_reservation(client):
     event_id = create_draft(client)
     selected_slot = slot()
-    old_flow = client.post(
-        "/reservations",
-        json={"eventId": event_id, **selected_slot},
-        headers=headers(OWNER),
-    )
+    # An earlier attempt already holds the slot for this event (the standalone
+    # POST /reservations that used to create it was removed).
+    from BLL import FlowController
+
+    FlowController.reserve_for_event(event_id, selected_slot["roomId"], selected_slot["reservationDate"])
 
     response = client.post(
         f"/events/{event_id}/submit",
@@ -187,7 +187,6 @@ def test_retry_reuses_existing_active_reservation(client):
         headers=headers(OWNER),
     )
 
-    assert old_flow.status_code == 201
     assert response.status_code == 200
     assert len(reservations(event_id)) == 1
 
