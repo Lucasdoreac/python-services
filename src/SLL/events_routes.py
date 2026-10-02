@@ -88,7 +88,7 @@ def update_and_start_approval(event_id, data):
                     Logmessage.EVENT_APPROVAL_START_FAILED,
                     LogType.ERROR,
                     event_id=data.get('eventId'),
-                    error=error,
+                    error=type(error).__name__,
                 )
             return result
         if data.get('classificacao') in ['class', 'exam']:
@@ -103,7 +103,7 @@ def update_and_start_approval(event_id, data):
                     Logmessage.EVENT_APPROVAL_START_FAILED,
                     LogType.ERROR,
                     event_id=data.get('eventId'),
-                    error=error,
+                    error=type(error).__name__,
                 )
             return result
     if data.get('status') == 'requested':
