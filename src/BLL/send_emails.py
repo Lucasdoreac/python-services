@@ -243,7 +243,7 @@ def send_reservation_info_to_reitoria(event_id, reservation_date=None, classific
                     if isinstance(campus_obj, dict):
                         campus_name = campus_obj.get("name", None)
             except Exception as e:
-                AppLogger.log(f"Error finding room: {str(e)}", LogType.ERROR, room_id=room_id)
+                AppLogger.log(f"Error finding room: {type(e).__name__}", LogType.ERROR, room_id=room_id)
 
     # 6. Format reservation date
     formatted_reservation_date = "Não informada"
