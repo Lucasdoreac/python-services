@@ -5,7 +5,8 @@ from flask import Blueprint, Response, jsonify, request, make_response
 from flasgger import swag_from
 
 from utils.enums import EventStatus
-from DAL import ReservationConflict, ReservationLockTimeout, ReservationManager
+from DAL import (EDITABLE_EVENT_STATUSES, ReservationConflict, ReservationLockTimeout,
+                 ReservationManager)
 from .swagger_docs import get_swagger_specification
 from BLL import FlowController,pdf
 from .auth_decorators import token_required
@@ -51,7 +52,7 @@ def _status_code(result):
 # after that comes from the approval flow. Editing or submitting is possible
 # only while the event is a draft or the coordination asked for changes.
 CLIENT_STATUSES = frozenset({EventStatus.DRAFT.value, 'requested'})
-EDITABLE_STATUSES = frozenset({EventStatus.DRAFT.value, EventStatus.REQUESTED_CHANGE.value})
+EDITABLE_STATUSES = EDITABLE_EVENT_STATUSES
 
 
 def event_status_gate(event_id, data):

@@ -20,6 +20,15 @@ ACTIVE_RESERVATION_STATUSES = [
 ]
 
 
+# Statuses in which the organizer may still edit or submit an event. Events
+# stored without a status are drafts.
+EDITABLE_EVENT_STATUSES = frozenset({EventStatus.DRAFT.value, EventStatus.REQUESTED_CHANGE.value})
+
+
+class EventNotEditable(Exception):
+    """O evento mudou de status e não aceita mais edição ou envio."""
+
+
 class ReservationConflict(ValueError):
     """A sala já está reservada no horário solicitado."""
 
@@ -250,10 +259,17 @@ class ReservationManager:
         """
         try:
             from bson import ObjectId
+            # The status is part of the filter, so the check and the write are
+            # one operation: a concurrent submit or approval makes this match nothing.
             result = self.events_collection.update_one(
-                {"_id": ObjectId(event_id)},
+                {
+                    "_id": ObjectId(event_id),
+                    "status": {"$in": [*EDITABLE_EVENT_STATUSES, None]},
+                },
                 {"$set": event_data}
             )
+            if result.matched_count == 0:
+                raise EventNotEditable(event_id)
             self.reservation_collection.update_many(
                 {"eventId": event_id},
                 {"$set": {"status": event_data.get("status")}}
@@ -263,6 +279,8 @@ class ReservationManager:
             else:
                 # Se nenhum documento foi modificado, pode significar que os dados são idênticos
                 return event_id
+        except EventNotEditable:
+            raise
         except Exception as e:
             # log the error
             AppLogger.log(Logmessage.UPDATING_EVENT_STATUS, LogType.ERROR,
