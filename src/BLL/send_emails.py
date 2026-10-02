@@ -346,9 +346,13 @@ def _expected_status(step):
             else EventStatus.APPROVED_BY_COORDENACAO.value)
 
 
+APPROVAL_ACTIONS = ("approve", "reject", "request_changes")
+MAX_CHANGE_MESSAGE = 1000
+
+
 def verify_token_from_email(token_id, event_id, action):
     """Return an active token only when event, approval stage, and action match."""
-    if action not in ("approve", "reject"):
+    if action not in APPROVAL_ACTIONS:
         return None
     record = send_email_repository.get_send_email_by_token_id(token_id)
     if not record or record.get("active") is not True:
@@ -361,6 +365,8 @@ def verify_token_from_email(token_id, event_id, action):
         return None
     if step not in (EmailStep.COORDENACAO.value, EmailStep.REITORIA.value):
         return None
+    if action == "request_changes" and step != EmailStep.COORDENACAO.value:
+        return None  # only the Coordenação asks for changes (issue #35)
     event = events_repository.find_by_id(event_id)
     if not event or event.get("status") != _expected_status(step):
         return None
@@ -378,12 +384,13 @@ def create_send_email_token(event_id: str, step: EmailStep, action: str, group_i
     return tokenId
 
 
-def perform_approval_action(event_id: str, token_id: str, action: str):
+def perform_approval_action(event_id: str, token_id: str, action: str, message: str | None = None):
     """Consume a scoped token and atomically transition the event from its expected status."""
     record = verify_token_from_email(token_id, event_id, action)
     if not record:
         return None
     step = int(record["step"])
+    extra = None
     if action == "approve":
         new_status = (EventStatus.APPROVED_BY_COORDENACAO.value
                       if step == EmailStep.COORDENACAO.value
@@ -392,6 +399,13 @@ def perform_approval_action(event_id: str, token_id: str, action: str):
         new_status = (EventStatus.REJECTED_BY_COORDENACAO.value
                       if step == EmailStep.COORDENACAO.value
                       else EventStatus.REJECTED_BY_REITORIA.value)
+    elif action == "request_changes":
+        new_status = EventStatus.REQUESTED_CHANGE.value
+        extra = {"changeRequest": {
+            "message": message,
+            "requestedAt": datetime.now().isoformat(timespec="seconds"),
+            "by": "coordenacao",
+        }}
     else:
         return None
 
@@ -403,6 +417,7 @@ def perform_approval_action(event_id: str, token_id: str, action: str):
         new_status,
         step,
         record["groupId"],
+        extra_event_fields=extra,
     ):
         return None
     if action in ("approve", "reject"):
