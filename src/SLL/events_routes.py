@@ -47,6 +47,33 @@ def _status_code(result):
     return result[1] if isinstance(result, tuple) else getattr(result, 'status_code', 200)
 
 
+# The server owns the event status. A client may ask only to keep editing a draft
+# ("draft", or no status) or to submit it ("requested"); every stored status
+# after that comes from the approval flow. Editing or submitting is possible
+# only while the event is a draft or the coordination asked for changes.
+CLIENT_STATUSES = frozenset({EventStatus.DRAFT.value, 'requested'})
+EDITABLE_STATUSES = frozenset({EventStatus.DRAFT.value, EventStatus.REQUESTED_CHANGE.value})
+
+
+def event_status_gate(event_id, data):
+    """Check the requested status against the stored one.
+
+    Returns an error response, or None when the request may go on; in that case
+    ``data['status']`` is already the value the server decided (the stored one
+    for an edit, ``requested`` for a submission).
+    """
+    requested = data.get('status')
+    if requested is not None and requested not in CLIENT_STATUSES:
+        return jsonify({'error': 'Invalid status'}), 400
+    event = FlowController.find_event_by_event_id(event_id) if ObjectId.is_valid(event_id) else None
+    current = (event or {}).get('status') or EventStatus.DRAFT.value
+    if current not in EDITABLE_STATUSES:
+        return jsonify({'error': 'The event can no longer be changed'}), 409
+    if requested != 'requested':
+        data['status'] = current
+    return None
+
+
 def update_and_start_approval(event_id, data):
     if data.get('status') == 'requested':
         if data.get('classificacao') in ['lecture', 'workshop']:
@@ -82,6 +109,9 @@ def update_and_start_approval(event_id, data):
                     ip_address=request.remote_addr,
                 )
             return result
+    if data.get('status') == 'requested':
+        # Not an event type that starts an approval: never store the raw request.
+        return jsonify({'error': 'Unsupported event type'}), 400
     return FlowController.update_event(event_id, data)
 
 
@@ -132,8 +162,6 @@ class EventsRoutes:
                           ou uma mensagem de erro e o status HTTP correspondente.
         """
         data = request.json
-        user_email = request.headers.get('email')
-        data['userEmail'] = user_email
         if not data:
             AppLogger.log(
                 Logmessage.MISSING_DATA,
@@ -141,6 +169,11 @@ class EventsRoutes:
                 ip_address=request.remote_addr,
             )
             return jsonify({'error': 'Missing data'}), 400
+        user_email = request.headers.get('email')
+        data['userEmail'] = user_email
+        if data.get('status') not in (None, EventStatus.DRAFT.value):
+            return jsonify({'error': 'Invalid status'}), 400
+        data['status'] = EventStatus.DRAFT.value  # a new event always starts as a draft
         id_event_response = FlowController.create_event(data)
 
         # Se id_event_response for uma tupla ou tiver o método get_json, extraia o valor:
@@ -212,6 +245,9 @@ class EventsRoutes:
         user_email = request.headers.get('email')
 
         data['userEmail'] = user_email
+        rejection = event_status_gate(event_id, data)
+        if rejection is not None:
+            return rejection
         result = update_and_start_approval(event_id, data)
 
         response = make_response(result)
@@ -240,6 +276,9 @@ class EventsRoutes:
             'status': 'requested',
             'userEmail': request.headers.get('email'),
         })
+        rejection = event_status_gate(event_id, data)
+        if rejection is not None:
+            return rejection
         try:
             reservation = FlowController.reserve_for_event(event_id, room_id, reservation_date)
         except ReservationConflict as error:
