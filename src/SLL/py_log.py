@@ -1,5 +1,7 @@
 import hashlib
 import hmac
+import re
+import sys
 import logging
 import os
 import logging.config
@@ -27,7 +29,19 @@ from datetime import datetime
 # Deactivate werkzeug logs
 logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
-logging.basicConfig(level=logging.INFO, filename="py_log.log", filemode="a",
+def _handlers():
+    """Log to stdout, which the platform keeps; a file only when LOG_FILE asks for one.
+
+    The file used to be the only destination (py_log.log inside the container): nothing
+    reached the platform's logs and it vanished with each deploy.
+    """
+    handlers = [logging.StreamHandler(sys.stdout)]
+    if os.getenv("LOG_FILE"):
+        handlers.append(logging.FileHandler(os.getenv("LOG_FILE"), mode="a"))
+    return handlers
+
+
+logging.basicConfig(level=logging.INFO, handlers=_handlers(),
                     format="%(asctime)s - %(levelname)s - %(message)s")
 
 
@@ -105,16 +119,38 @@ def mask_email(email) -> str:
     return "hmac:" + digest[:12]
 
 
+_EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+
+
+_SECRET = re.compile(
+    r"""(['"]?(?:token|hash|api[_-]?key|x-api-key|authorization|password|secret)['"]?\s*[:=]\s*['"]?)(?!sha256:|hmac:)([^'"\s,;&})]+)""",
+    re.IGNORECASE,
+)
+
+
+def scrub_emails(text: str) -> str:
+    """Replace every e-mail address in a log line with its keyed fingerprint, and the value of
+    anything labelled token/hash/key/password with a short fingerprint.
+
+    The log goes to the platform's retention, so no address or credential is written in clear,
+    wherever it comes from (a field, a request payload, an exception text).
+    """
+    text = _SECRET.sub(lambda match: match.group(1) + mask_token(match.group(2)), text)
+    return _EMAIL.sub(lambda match: mask_email(match.group(0)), text)
+
+
 class AppLogger:
 
     @staticmethod
     def log(message: Logmessage, log_type: LogType, **kwargs):
-        if "token" in kwargs:
-            kwargs["token"] = mask_token(kwargs["token"])
+        for secret in ("token", "api_key"):
+            if secret in kwargs:
+                kwargs[secret] = mask_token(kwargs[secret])
         try:
             current_date = datetime.timestamp(datetime.now())
             timestamp = datetime.timestamp(datetime.now())
-            formatted_message = f'{current_date} - {timestamp} - {message.value.format(**kwargs)}'
+            formatted_message = scrub_emails(
+                f'{current_date} - {timestamp} - {message.value.format(**kwargs)}')
         except KeyError as e:
             logging.error(f"Erro na formatação da mensagem de log:{e}")
             return
