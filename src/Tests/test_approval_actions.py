@@ -110,9 +110,9 @@ def test_approval_emails_issue_distinct_tokens_bound_to_each_action(
         if record["tokenId"] not in existing_token_ids
     ]
     assert {token["action"] for token in coordination_tokens} == {
-        "approve", "reject"
+        "approve", "reject", "request_changes"
     }
-    assert len({token["tokenId"] for token in coordination_tokens}) == 2
+    assert len({token["tokenId"] for token in coordination_tokens}) == 3
     assert all(token["groupId"] == coordination_tokens[0]["groupId"] for token in coordination_tokens)
     assert db.send_email.find_one({"tokenId": next(iter(existing_token_ids))})["active"] is False
     assert db.events.find_one({"_id": ObjectId(event_id)})["approvalTokenGroups"]["0"] == coordination_tokens[0]["groupId"]
@@ -259,10 +259,7 @@ def test_reitoria_token_only_works_at_reitoria_stage(approval_client):
     assert db.send_email.find_one({"tokenId": token_id})["active"] is False
 
 
-def test_request_changes_stays_out_of_the_email_until_the_email_slice(approval_client, monkeypatch):
-    from BLL import send_emails
-
-    event_id, _, _ = create_approval(approval_client)
+def _coordination_email(send_emails, monkeypatch):
     monkeypatch.setenv("FLASK_ENV", "development")
     monkeypatch.setattr(
         send_emails.FlowController,
@@ -271,18 +268,74 @@ def test_request_changes_stays_out_of_the_email_until_the_email_slice(approval_c
     )
     monkeypatch.setattr(send_emails, "get_coordinator_by_graduation_id", lambda _id: "teacher-1")
     monkeypatch.setattr(send_emails, "find_teacher_email_by_id", lambda _id: "coord@example.test")
-    email_html = send_emails.send_to_coordenacao(event_id)
-    assert "Solicitar alterações" not in email_html
-    assert "/request_changes" not in email_html
 
-    response = approval_client.get(
-        "/request_changes", query_string={"eventId": event_id, "tokenId": "old-token"}
+
+def test_coordinator_email_carries_the_request_changes_link(approval_client, monkeypatch):
+    from BLL import send_emails
+
+    event_id, _, _ = create_approval(approval_client)
+    _coordination_email(send_emails, monkeypatch)
+    email_html = send_emails.send_to_coordenacao(event_id)
+    db = MongoDBConnectionFactory.get_db()
+    token = db.send_email.find_one(
+        {"eventId": event_id, "action": "request_changes", "step": 0, "active": True}
+    )["tokenId"]
+    assert "/request_changes?eventId=" in email_html
+    assert token in email_html
+
+    opened = approval_client.get("/request_changes", query_string={"eventId": event_id, "tokenId": token})
+    assert opened.status_code == 200
+
+    db.events.update_one({"_id": ObjectId(event_id)}, {"$set": {"status": "approved_by_coordenacao"}})
+    reitoria_html = send_emails.send_to_reitoria(event_id)
+    assert "/request_changes" not in reitoria_html
+    assert db.send_email.find_one({"eventId": event_id, "action": "request_changes", "step": 1}) is None
+
+
+def test_the_coordinator_email_has_a_text_fallback_without_icons(approval_client, monkeypatch):
+    from BLL import send_emails
+
+    event_id, _, _ = create_approval(approval_client)
+    _coordination_email(send_emails, monkeypatch)
+    monkeypatch.delenv("MINIO_URL", raising=False)
+    email_html = send_emails.send_to_coordenacao(event_id)
+    assert "Solicitar alterações" in email_html
+    assert 'alt="Solicitar alterações"' not in email_html  # no empty image without MinIO
+
+
+def test_the_organizer_is_told_what_was_asked_and_the_text_is_escaped(approval_client, monkeypatch):
+    sent = []
+    monkeypatch.setattr("BLL.send_emails.send_email", lambda payload: sent.append(payload))
+    event_id, token_id, _ = create_approval(approval_client, action="request_changes")
+    reason = "<b>trocar a sala</b> por uma com projetor"
+
+    response = approval_client.post(
+        "/request_changes", data={"eventId": event_id, "tokenId": token_id, "message": reason}
     )
-    assert response.status_code == 404
-    assert response.get_json() == {"error": "Link expirado ou inválido"}
-    assert MongoDBConnectionFactory.get_db().events.find_one(
-        {"_id": ObjectId(event_id)}
-    )["status"] == "waiting"
+
+    assert response.status_code == 200
+    (payload,) = [p for p in sent if p["subject"] == "Alterações solicitadas no seu evento"]
+    assert payload["to"] == ["owner@example.test"]
+    assert "&lt;b&gt;trocar a sala&lt;/b&gt;" in payload["content"]
+    assert "<b>trocar a sala</b>" not in payload["content"]
+    assert token_id not in payload["content"] and "tokenId" not in payload["content"]
+
+
+def test_a_failing_notification_does_not_undo_the_request(approval_client, monkeypatch):
+    def broken(_payload):
+        raise RuntimeError("provider down")
+
+    monkeypatch.setattr("BLL.send_emails.send_email", broken)
+    event_id, token_id, _ = create_approval(approval_client, action="request_changes")
+
+    response = approval_client.post(
+        "/request_changes", data={"eventId": event_id, "tokenId": token_id, "message": "Trocar a sala."}
+    )
+
+    assert response.status_code == 200
+    event = MongoDBConnectionFactory.get_db().events.find_one({"_id": ObjectId(event_id)})
+    assert event["status"] == "requested_change"
+    assert event["changeRequest"]["message"] == "Trocar a sala."
 
 
 def test_failed_reservation_transition_restores_event_and_token(approval_client):

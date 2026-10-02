@@ -84,7 +84,7 @@ def send_to_coordenacao(event_id):
         raise ValueError("Evento não está aguardando aprovação da Coordenação")
     tokens = {
         action: create_send_email_token(event_id, EmailStep.COORDENACAO, action, group_id)
-        for action in ("approve", "reject")
+        for action in ("approve", "reject", "request_changes")
     }
     # MinIO icon URLs (adjust paths as needed)
     pdf_link = _pdf_link(event_id)
@@ -95,7 +95,8 @@ def send_to_coordenacao(event_id):
 
     # Example links (adjust to your routes)
     with current_app.test_request_context():
-        request_changes_link = None
+        request_changes_link = url_for('templates_bp.request_changes', eventId=event_id,
+                                       tokenId=tokens["request_changes"], _external=True)
         approve_link = url_for('templates_bp.approve', eventId=event_id, tokenId=tokens["approve"], _external=True)
         reject_link = url_for('templates_bp.reject', eventId=event_id, tokenId=tokens["reject"], _external=True)
 
@@ -162,7 +163,7 @@ def send_to_reitoria(event_id):
     reject_icon_url = _icon_url("reject.png")
 
     # Example links (adjust to your routes)
-    # Maybe Reitoria doesn't need a 'request changes' link. You can omit or include it as needed.
+    # Only the Coordenação can ask for changes (issue #35); the Reitoria decides on what it approved.
     request_changes_link = None
     with current_app.test_request_context():
         approve_link = url_for('templates_bp.approve', eventId=event_id, tokenId=tokens["approve"], _external=True)
@@ -340,6 +341,26 @@ def send_event_status(event_id, is_approved: bool, who: str, token: str = None):
     }
     return send_email(payload)
 
+def send_change_request(event_id, message):
+    """Tell the organizer what the Coordenação asked to change. No action link, no token."""
+    event = events_repository.find_by_id(event_id)
+    email = event["organizer"]["email"]
+    base = (os.getenv("FRONTEND_URL") or "").strip().rstrip("/")
+    html_content = render_template(
+        "email/alteracoes_solicitadas.html",
+        event_name=event.get("name") or "seu evento",
+        message=message,
+        my_events_link=f"{base}/event/mine" if base else None,
+    )
+    if os.getenv("FLASK_ENV") == "development":
+        return html_content
+    return send_email({
+        "subject": "Alterações solicitadas no seu evento",
+        "content": html_content,
+        "to": [email],
+        "is_html": True,
+    })
+
 def _expected_status(step):
     return (EventStatus.WAITING.value if step == EmailStep.COORDENACAO.value
             else EventStatus.APPROVED_BY_COORDENACAO.value)
@@ -419,6 +440,16 @@ def perform_approval_action(event_id: str, token_id: str, action: str, message: 
         extra_event_fields=extra,
     ):
         return None
+    if action == "request_changes":
+        try:
+            send_change_request(event_id, message)
+        except Exception as error:  # the request is recorded; a failed notice only goes to the log
+            AppLogger.log(
+                Logmessage.CHANGE_REQUEST_NOTICE_FAILED,
+                LogType.ERROR,
+                event_id=event_id,
+                error=type(error).__name__,
+            )
     if action in ("approve", "reject"):
         send_event_status(
             event_id,

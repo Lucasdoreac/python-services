@@ -80,6 +80,7 @@ class Logmessage(Enum):
     EVENT_APPROVAL_START_FAILED = "Event {event_id} approval start failed: {error}; IP: {ip_address};"
     EVENT_PDF_FETCH_FAILED = "Event {event_id} PDF fetch failed: {error}; IP: {ip_address};"
     EVENTS_LIST_FAILED = "Events listing failed: {error}; IP: {ip_address};"
+    CHANGE_REQUEST_NOTICE_FAILED = "Change request notice for event {event_id} failed: {error};"
 
 
 
