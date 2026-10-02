@@ -203,3 +203,91 @@ def test_submit_requires_room_and_reservation_date(client):
     assert response.status_code == 400
     assert reservations(event_id) == []
     assert event_document(event_id)["status"] == "draft"
+
+
+# --- a resubmission after a change request must not leave two reservations -----------------
+
+def request_changes_on(event_id):
+    db = MongoDBConnectionFactory.get_db()
+    db.events.update_one({"_id": ObjectId(event_id)}, {"$set": {
+        "status": "requested_change", "changeRequest": {"message": "x", "by": "coordenacao"}}})
+    db.reservations.update_many({"eventId": event_id}, {"$set": {"status": "requested_change"}})
+
+
+def test_resubmit_with_another_room_replaces_the_reservation(client):
+    event_id = create_draft(client)
+    first, second = slot(), slot()
+    assert client.post(f"/events/{event_id}/submit", json={**EVENT, **first}, headers=headers(OWNER)).status_code == 200
+    request_changes_on(event_id)
+
+    response = client.post(f"/events/{event_id}/submit", json={**EVENT, **second}, headers=headers(OWNER))
+
+    assert response.status_code == 200, response.get_json()
+    held = reservations(event_id)
+    assert [r["roomId"] for r in held] == [second["roomId"]]
+    assert held[0]["status"] == "waiting" and event_document(event_id)["status"] == "waiting"
+    # the first room is free again for another event
+    other = create_draft(client, OTHER)
+    assert client.post(f"/events/{other}/submit", json={**EVENT, **first}, headers=headers(OTHER)).status_code == 200
+
+
+def test_resubmit_into_a_taken_room_keeps_the_old_reservation(client):
+    event_id, rival = create_draft(client), create_draft(client, OTHER)
+    first, taken = slot(), slot()
+    assert client.post(f"/events/{event_id}/submit", json={**EVENT, **first}, headers=headers(OWNER)).status_code == 200
+    assert client.post(f"/events/{rival}/submit", json={**EVENT, **taken}, headers=headers(OTHER)).status_code == 200
+    request_changes_on(event_id)
+
+    response = client.post(f"/events/{event_id}/submit", json={**EVENT, **taken}, headers=headers(OWNER))
+
+    assert response.status_code == 409
+    assert [r["roomId"] for r in reservations(event_id)] == [first["roomId"]]
+    assert event_document(event_id)["status"] == "requested_change"
+
+
+def test_a_failed_resubmission_keeps_the_old_reservation(client, monkeypatch):
+    from BLL import FlowController
+
+    event_id = create_draft(client)
+    first, second = slot(), slot()
+    assert client.post(f"/events/{event_id}/submit", json={**EVENT, **first}, headers=headers(OWNER)).status_code == 200
+    request_changes_on(event_id)
+    monkeypatch.setattr(FlowController, "update_event",
+                        staticmethod(lambda *a, **k: (jsonify({"error": "failed"}), 500)))
+
+    response = client.post(f"/events/{event_id}/submit", json={**EVENT, **second}, headers=headers(OWNER))
+
+    assert response.status_code == 500
+    assert [r["roomId"] for r in reservations(event_id)] == [first["roomId"]]
+
+
+def test_status_update_reaches_every_reservation_of_the_event(client):
+    from DAL.reservation_manager import ReservationManager
+
+    event_id = create_draft(client)
+    db = MongoDBConnectionFactory.get_db()
+    for room in ("legacy-a", "legacy-b"):
+        db.reservations.insert_one({"eventId": event_id, "roomId": room, "status": "draft"})
+    ReservationManager().update_event(event_id, {"status": "waiting"})
+    assert {r["status"] for r in reservations(event_id)} == {"waiting"}
+
+
+def test_the_organizer_can_resubmit_after_a_change_request(client):
+    event_id = create_draft(client)
+    chosen = slot()
+    assert client.post(f"/events/{event_id}/submit", json={**EVENT, **chosen}, headers=headers(OWNER)).status_code == 200
+    request_changes_on(event_id)
+    response = client.post(f"/events/{event_id}/submit", json={**EVENT, **chosen}, headers=headers(OWNER))
+    assert response.status_code == 200, response.get_json()
+    assert event_document(event_id)["status"] == "waiting" and len(reservations(event_id)) == 1
+
+
+def test_put_cannot_write_status_or_change_request(client):
+    event_id = create_draft(client)
+    assert client.post(f"/events/{event_id}/submit", json={**EVENT, **slot()}, headers=headers(OWNER)).status_code == 200
+    request_changes_on(event_id)
+    client.put(f"/events/{event_id}", json={**EVENT, "status": "approved_by_reitoria",
+                                           "changeRequest": {"message": "forged"}}, headers=headers(OWNER))
+    event = event_document(event_id)
+    assert event["status"] == "requested_change"
+    assert event["changeRequest"]["message"] == "x"

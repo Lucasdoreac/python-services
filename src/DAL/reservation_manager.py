@@ -112,6 +112,13 @@ class ReservationManager:
     def delete_reservation(self, reservation_id):
         self.reservation_collection.delete_one({"_id": reservation_id})
 
+    def find_reservation_ids_of_event(self, event_id):
+        return [r["_id"] for r in self.reservation_collection.find({"eventId": event_id}, {"_id": 1})]
+
+    def delete_reservations(self, reservation_ids):
+        if reservation_ids:
+            self.reservation_collection.delete_many({"_id": {"$in": list(reservation_ids)}})
+
     def find_unavailable_room_ids_by_date(self, date_str: str, time_str: str):
         """
         Recebe uma data no formato 'YYYY-MM-DD' e um horário no formato 'HH:MM:SS'
@@ -197,7 +204,7 @@ class ReservationManager:
             if before is None:
                 raise EventNotEditable(event_id)
             try:
-                self.reservation_collection.update_one(
+                self.reservation_collection.update_many(
                     {"eventId": event_id},
                     {"$set": {"status": event_data.get("status")}}
                 )
@@ -247,13 +254,21 @@ class ReservationManager:
 
     def transition_event_status(
         self, event_id: str, token_id: str, action: str, expected_status: str,
-        new_status: str, step: int, group_id: str
+        new_status: str, step: int, group_id: str, extra_event_fields: dict | None = None
     ):
-        """Consume a scoped token and transition its event/reservation together."""
+        """Consume a scoped token and transition its event/reservation together.
+
+        ``extra_event_fields`` are written with the new status and removed again by the
+        compensations, so a failed reservation update leaves no trace of them.
+        """
         from bson import ObjectId
         from pymongo.errors import PyMongoError
 
         group_key = f"approvalTokenGroups.{int(step)}"
+        extra = extra_event_fields or {}
+        restore = {"$set": {"status": expected_status, group_key: group_id}}
+        if extra:
+            restore["$unset"] = {key: "" for key in extra}
 
         class TransitionConflict(Exception):
             pass
@@ -279,7 +294,7 @@ class ReservationManager:
 
             event = self.events_collection.update_one(
                 {"_id": ObjectId(event_id), "status": expected_status, group_key: group_id},
-                {"$set": {"status": new_status}, "$unset": {group_key: ""}},
+                {"$set": {"status": new_status, **extra}, "$unset": {group_key: ""}},
                 **options,
             )
             if event.modified_count != 1:
@@ -328,7 +343,7 @@ class ReservationManager:
             if state["event_changed"] and not state["reservation_changed"]:
                 self.events_collection.update_one(
                     {"_id": ObjectId(event_id), "status": new_status, group_key: {"$exists": False}},
-                    {"$set": {"status": expected_status, group_key: group_id}},
+                    restore,
                 )
             current = self.events_collection.find_one(
                 {"_id": ObjectId(event_id), "status": expected_status, group_key: group_id}
@@ -350,7 +365,7 @@ class ReservationManager:
             if state["event_changed"] and not state["reservation_changed"]:
                 self.events_collection.update_one(
                     {"_id": ObjectId(event_id), "status": new_status, group_key: {"$exists": False}},
-                    {"$set": {"status": expected_status, group_key: group_id}},
+                    restore,
                 )
                 self.send_email_collection.update_one(
                     {

@@ -274,6 +274,7 @@ class EventsRoutes:
         rejection = event_status_gate(event_id, data)
         if rejection is not None:
             return rejection
+        previous = FlowController.reservation_ids_of_event(event_id)
         try:
             reservation = FlowController.reserve_for_event(event_id, room_id, reservation_date)
         except ReservationConflict as error:
@@ -283,7 +284,11 @@ class EventsRoutes:
 
         result = update_and_start_approval(event_id, data)
         if _status_code(result) >= 400 and reservation is not None:
-            FlowController.undo_reservation(reservation)
+            FlowController.undo_reservation(reservation)  # the previous reservation stays in place
+        elif reservation is not None:
+            # resubmitted with another room or time: the old slots are released only now that
+            # the new one is held and the submission went through
+            FlowController.release_reservations([rid for rid in previous if rid != reservation["_id"]])
 
         response = make_response(result)
         response.headers['Cache-Control'] = 'no-cache, no-store'

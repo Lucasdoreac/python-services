@@ -259,7 +259,7 @@ def test_reitoria_token_only_works_at_reitoria_stage(approval_client):
     assert db.send_email.find_one({"tokenId": token_id})["active"] is False
 
 
-def test_request_changes_is_hidden_and_disabled_until_issue_35(approval_client, monkeypatch):
+def test_request_changes_stays_out_of_the_email_until_the_email_slice(approval_client, monkeypatch):
     from BLL import send_emails
 
     event_id, _, _ = create_approval(approval_client)
@@ -278,7 +278,8 @@ def test_request_changes_is_hidden_and_disabled_until_issue_35(approval_client, 
     response = approval_client.get(
         "/request_changes", query_string={"eventId": event_id, "tokenId": "old-token"}
     )
-    assert response.status_code == 410
+    assert response.status_code == 404
+    assert response.get_json() == {"error": "Link expirado ou inválido"}
     assert MongoDBConnectionFactory.get_db().events.find_one(
         {"_id": ObjectId(event_id)}
     )["status"] == "waiting"
@@ -298,4 +299,78 @@ def test_failed_reservation_transition_restores_event_and_token(approval_client)
     assert response.status_code == 409
     assert db.events.find_one({"_id": ObjectId(event_id)})["status"] == "waiting"
     assert db.events.find_one({"_id": ObjectId(event_id)})["approvalTokenGroups"]["0"] == group_id
+    assert db.send_email.find_one({"tokenId": token_id})["active"] is True
+
+
+# --- request changes (issue #35) ---------------------------------------------------------
+
+MESSAGE = "Trocar a sala por uma com projetor e informar o número de inscritos."
+
+
+def test_request_changes_link_only_previews_and_post_moves_event_and_reservation(approval_client):
+    event_id, token_id, _ = create_approval(approval_client, action="request_changes")
+    db = MongoDBConnectionFactory.get_db()
+    preview = approval_client.get("/request_changes", query_string={"eventId": event_id, "tokenId": token_id})
+    assert preview.status_code == 200 and b"<textarea" in preview.data
+    assert db.events.find_one({"_id": ObjectId(event_id)})["status"] == "waiting"
+    done = approval_client.post("/request_changes", data={"eventId": event_id, "tokenId": token_id, "message": MESSAGE})
+    assert done.status_code == 200
+    event = db.events.find_one({"_id": ObjectId(event_id)})
+    assert event["status"] == "requested_change"
+    assert event["changeRequest"]["message"] == MESSAGE and event["changeRequest"]["by"] == "coordenacao"
+    assert "0" not in (event.get("approvalTokenGroups") or {})
+    assert db.reservations.find_one({"eventId": event_id})["status"] == "requested_change"
+    assert db.send_email.find_one({"tokenId": token_id})["active"] is False
+
+
+def test_request_changes_token_is_single_use_and_does_not_overwrite_the_message(approval_client):
+    event_id, token_id, _ = create_approval(approval_client, action="request_changes")
+    approval_client.post("/request_changes", data={"eventId": event_id, "tokenId": token_id, "message": MESSAGE})
+    again = approval_client.post("/request_changes", data={"eventId": event_id, "tokenId": token_id, "message": "outro texto"})
+    assert again.status_code == 404
+    assert MongoDBConnectionFactory.get_db().events.find_one({"_id": ObjectId(event_id)})["changeRequest"]["message"] == MESSAGE
+
+
+@pytest.mark.parametrize("message", ["", "   ", "x" * 1001])
+def test_an_invalid_message_is_refused_without_spending_the_token(approval_client, message):
+    event_id, token_id, _ = create_approval(approval_client, action="request_changes")
+    response = approval_client.post("/request_changes", data={"eventId": event_id, "tokenId": token_id, "message": message})
+    db = MongoDBConnectionFactory.get_db()
+    assert response.status_code == 400
+    assert b'role="alert"' in response.data
+    assert db.send_email.find_one({"tokenId": token_id})["active"] is True
+    assert db.events.find_one({"_id": ObjectId(event_id)})["status"] == "waiting"
+
+
+def test_the_message_is_escaped_in_the_form_it_is_given_back_in(approval_client):
+    event_id, token_id, _ = create_approval(approval_client, action="request_changes")
+    response = approval_client.post("/request_changes", data={
+        "eventId": event_id, "tokenId": token_id, "message": "</textarea><script>alert(1)</script>" + "x" * 1000})
+    assert response.status_code == 400
+    assert b"<script>" not in response.data
+
+
+def test_an_approve_token_cannot_request_changes_and_the_reverse(approval_client):
+    event_id, approve_token, _ = create_approval(approval_client, action="approve")
+    assert approval_client.post("/request_changes", data={"eventId": event_id, "tokenId": approve_token, "message": MESSAGE}).status_code == 404
+    event_id2, change_token, _ = create_approval(approval_client, action="request_changes")
+    assert approval_client.post("/approve", data={"eventId": event_id2, "tokenId": change_token}).status_code == 404
+
+
+def test_only_the_coordination_stage_can_request_changes(approval_client):
+    event_id, token_id, _ = create_approval(approval_client, step=1, action="request_changes", status="approved_by_coordenacao")
+    response = approval_client.post("/request_changes", data={"eventId": event_id, "tokenId": token_id, "message": MESSAGE})
+    assert response.status_code == 404
+    assert MongoDBConnectionFactory.get_db().events.find_one({"_id": ObjectId(event_id)})["status"] == "approved_by_coordenacao"
+
+
+def test_a_failed_reservation_update_leaves_no_change_request_behind(approval_client):
+    event_id, token_id, group_id = create_approval(approval_client, action="request_changes")
+    db = MongoDBConnectionFactory.get_db()
+    db.reservations.update_one({"eventId": event_id}, {"$set": {"status": "rejected_by_coordenacao"}})
+    response = approval_client.post("/request_changes", data={"eventId": event_id, "tokenId": token_id, "message": MESSAGE})
+    event = db.events.find_one({"_id": ObjectId(event_id)})
+    assert response.status_code == 409
+    assert event["status"] == "waiting" and "changeRequest" not in event
+    assert event["approvalTokenGroups"]["0"] == group_id
     assert db.send_email.find_one({"tokenId": token_id})["active"] is True
