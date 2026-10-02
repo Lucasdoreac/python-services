@@ -14,7 +14,8 @@ def create_app(config_class):
         Swagger(app)
     app.after_request(apply_security_headers)
     app.config.from_object(config_class)
-    CORS(app)
+    from .security_headers import cors_origins
+    CORS(app, origins=cors_origins(), supports_credentials=False)
 
     from DAL import MongoDBConnectionFactory
     # Load MongoDB Factory
