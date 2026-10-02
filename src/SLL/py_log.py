@@ -57,6 +57,7 @@ class Logmessage(Enum):
     ID_NOT_INFORMED = "ID not informed or null; IP: {ip_address}; Collection: {collection}; ID: {id};"
     EVENT_OWNER_MISMATCH = "Event {event_id} update denied to a non-organizer; IP: {ip_address};"
     EVENT_APPROVAL_START_FAILED = "Event {event_id} approval start failed: {error}; IP: {ip_address};"
+    CHANGE_REQUEST_NOTICE_FAILED = "Change request notice for event {event_id} failed: {error};"
 
 
 
