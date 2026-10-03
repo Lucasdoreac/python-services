@@ -31,7 +31,6 @@ class ResourcesRoutes:
         AppLogger.log(
             Logmessage.ROOMS_NOT_FOUND,
             LogType.INFO,
-            ip_address=request.remote_addr,
         )
         return jsonify({'error': "Rooms not found"}), 404
 
@@ -48,7 +47,6 @@ class ResourcesRoutes:
         AppLogger.log(
             Logmessage.ROOMS_NOT_FOUND,
             LogType.INFO,
-            ip_address=request.remote_addr,
         )
         return jsonify({'error': "Room not found by search method"}), 404
 
@@ -74,7 +72,6 @@ class ResourcesRoutes:
             AppLogger.log(
                 message=Logmessage.INTERNAL_APIS_CRASHED,
                 log_type=LogType.ERROR,
-                ip_address=request.remote_addr,
                 payload=f"body_length={len(request.data or b'')}",
                 endpoint=request.path,
                 error=type(e).__name__,
@@ -107,7 +104,6 @@ class ResourcesRoutes:
         AppLogger.log(
             Logmessage.CAMPUS_NOT_FOUND,
             LogType.INFO,
-            ip_address=request.remote_addr,
         )
         return jsonify({'error': "Campus not found"}), 404
 
@@ -136,7 +132,6 @@ class ResourcesRoutes:
             AppLogger.log(
                 Logmessage.COURSES_NOT_FOUND,
                 LogType.INFO,
-                ip_address=request.remote_addr,
             )
             return jsonify({'error': "Course not found"}), 404
 
@@ -162,7 +157,6 @@ class ResourcesRoutes:
         AppLogger.log(
             Logmessage.DISCIPLINES_NOT_FOUND,
             LogType.INFO,
-            ip_address=request.remote_addr,
         )
         return jsonify({'error': "disciplines not found"}), 404
 
@@ -179,7 +173,6 @@ class ResourcesRoutes:
         AppLogger.log(
             Logmessage.PERIODS_NOT_FOUND,
             LogType.INFO,
-            ip_address=request.remote_addr,
         )
         return jsonify({'error': "periods not found"}), 404
 
@@ -197,7 +190,6 @@ class ResourcesRoutes:
         AppLogger.log(
             Logmessage.TEACHERS_NOT_FOUND,
             LogType.INFO,
-            ip_address=request.remote_addr,
         )
         return jsonify({'error': "teachers not found"}), 404
 

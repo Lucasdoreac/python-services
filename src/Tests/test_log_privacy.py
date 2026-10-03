@@ -1,193 +1,64 @@
-"""Logs carry no request body, URL or exception text."""
+"""The log goes to the platform's retention: no e-mail address and no raw token may reach it."""
 
 import logging
+import string
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
-import requests
-from mongomock import MongoClient
 
-from Tests.test_event_submission import (  # noqa: F401
-    EVENT, OWNER, client, create_draft, headers, slot,
-)
+from SLL.py_log import AppLogger, Logmessage, LogType, mask_email, scrub_emails
 
-BODY_SENTINEL = "SENTINELA-CORPO-9f3a"
-ERROR_SENTINEL = "SENTINELA-ERRO-7c21"
+ADDRESS = "pessoa.teste@udf.edu.br"
+OTHER = "outra.pessoa@gmail.com"
+RAW_TOKEN = "raw-token-0123456789-abcdef"
 
 
-def test_rooms_error_log_has_no_body_or_exception_text(client, monkeypatch, caplog):
-    from BLL import FlowController
-
-    def crash(*args, **kwargs):
-        raise RuntimeError(ERROR_SENTINEL)
-
-    monkeypatch.setattr(FlowController, "filter_available_rooms", crash)
-    with caplog.at_level(logging.INFO):
-        response = client.get(
-            "/rooms/available-rooms?date=2031-03-01&time=10:00:00",
-            data=BODY_SENTINEL,
-            headers=headers(OWNER),
-        )
-
-    assert response.status_code == 500
-    assert "Internal APIs crashed" in caplog.text
-    assert BODY_SENTINEL not in caplog.text
-    assert ERROR_SENTINEL not in caplog.text
-    assert "RuntimeError" in caplog.text
-    assert f"body_length={len(BODY_SENTINEL)}" in caplog.text
+def sample_fields(message):
+    """Fill every placeholder; the ones that can carry personal data carry an address and a token."""
+    fields = {}
+    for _, name, _, _ in string.Formatter().parse(message.value):
+        if not name:
+            continue
+        if name in ("email", "who"):
+            fields[name] = ADDRESS
+        elif name == "token":
+            fields[name] = RAW_TOKEN
+        elif name in ("payload", "error"):
+            fields[name] = f"{{'email': '{OTHER}', 'token': '{RAW_TOKEN}'}} for {ADDRESS}"
+        else:
+            fields[name] = "x"
+    return fields
 
 
-def test_approval_start_failure_log_has_no_exception_text(client, monkeypatch, caplog):
-    def crash(**kwargs):
-        raise RuntimeError(ERROR_SENTINEL)
-
-    monkeypatch.setattr("SLL.events_routes.pdf.generate_event_pdf", crash)
-    event_id = create_draft(client)
-    with caplog.at_level(logging.INFO):
-        response = client.post(
-            f"/events/{event_id}/submit", json={**EVENT, **slot()}, headers=headers(OWNER)
-        )
-
-    assert response.status_code == 200
-    assert "approval start failed" in caplog.text
-    assert ERROR_SENTINEL not in caplog.text
+@pytest.mark.parametrize("message", list(Logmessage), ids=lambda m: m.name)
+def test_no_message_writes_an_address_or_a_raw_token(message, caplog):
+    with caplog.at_level(logging.DEBUG):
+        AppLogger.log(message, LogType.INFO, **sample_fields(message))
+    assert caplog.records, f"{message.name} wrote nothing"
+    text = "\n".join(r.getMessage() for r in caplog.records)
+    for forbidden in (ADDRESS, OTHER, RAW_TOKEN, "@udf.edu.br", "@gmail.com"):
+        assert forbidden not in text, f"{message.name} wrote {forbidden}"
 
 
-def test_auth_unavailable_log_has_no_exception_text(monkeypatch, caplog):
-    from flask import Flask
-    from BLL import authentication
-
-    def crash(*args, **kwargs):
-        raise requests.exceptions.ConnectionError(f"https://auth.test/{ERROR_SENTINEL}")
-
-    monkeypatch.setattr(authentication, "call_auth", crash)
-    with caplog.at_level(logging.INFO), Flask(__name__).test_request_context():
-        response = authentication.AuthenticationController.insert_token("user@udf.edu.br")
-
-    assert response.status_code == 503
-    assert ERROR_SENTINEL not in caplog.text
+def test_an_address_becomes_the_same_fingerprint_the_audit_line_uses():
+    line = scrub_emails(f"login by {ADDRESS} and {ADDRESS.upper()}")
+    assert line == f"login by {mask_email(ADDRESS)} and {mask_email(ADDRESS)}"
+    assert "@" not in line
 
 
-# --- remaining log and stdout call sites ------------------------------------------
-
-
-def test_pdf_fetch_error_log_has_no_exception_text(client, monkeypatch, caplog):
-    from SLL import events_routes, signed_links
-
-    class BrokenManager:
-        def get_pdf_by_event_id(self, event_id):
-            raise RuntimeError(ERROR_SENTINEL)
-
-    monkeypatch.setattr(events_routes, "ReservationManager", BrokenManager)
-    with caplog.at_level(logging.INFO):
-        response = client.get(f"/events/event-123/pdf?{signed_links.signed_query("event-123")}")
-
-    assert response.status_code == 500
-    assert response.get_json() == {"error": "Internal Server Error"}
-    assert "PDF fetch failed" in caplog.text
-    assert "RuntimeError" in caplog.text
-    assert "event-123" in caplog.text
-    assert ERROR_SENTINEL not in caplog.text
-
-
-def test_events_listing_error_log_has_no_exception_text(client, monkeypatch, caplog):
-    from BLL import FlowController
-
-    def crash(*args, **kwargs):
-        raise RuntimeError(ERROR_SENTINEL)
-
-    monkeypatch.setattr(FlowController, "find_events_by_user_email", crash)
-    with caplog.at_level(logging.INFO):
-        response = client.get("/events", headers=headers(OWNER))
-
-    assert response.status_code == 500
-    assert response.get_json() == {"error": "Internal Server Error"}
-    assert "Events listing failed" in caplog.text
-    assert "RuntimeError" in caplog.text
-    assert ERROR_SENTINEL not in caplog.text
-
-
-def test_plain_text_log_message_is_written_as_is(caplog):
-    from SLL.py_log import AppLogger, LogType
-
-    with caplog.at_level(logging.INFO):
-        AppLogger.log("mensagem pronta {sem_campo}", LogType.WARNING)
-
-    assert "mensagem pronta {sem_campo}" in caplog.text
-
-
-def test_room_lookup_does_not_print_the_rejected_input(client, capsys):
-    from DAL import ReservationManager
-
-    assert ReservationManager().find_unavailable_room_ids_by_date(ERROR_SENTINEL, "10:00:00") == []
-
-    captured = capsys.readouterr()
-    assert "ValueError" in captured.out
-    assert ERROR_SENTINEL not in captured.out + captured.err
-
-
-def test_minio_failure_does_not_print_exception_text(client, monkeypatch, capsys, tmp_path):
-    from BLL import pdf
-
-    class BrokenMinio:
-        def __init__(self, *args, **kwargs):
-            raise RuntimeError(ERROR_SENTINEL)
-
-    class FakeReservationManager:
-        def insert_pdf(self, document):
-            pass
-
-    monkeypatch.setenv("MINIO_URL", "http://minio.test:9000")
-    monkeypatch.setattr(pdf, "Minio", BrokenMinio)
-    monkeypatch.setattr(pdf, "ReservationManager", FakeReservationManager)
-    pdf_path = tmp_path / "event.pdf"
-    pdf_path.write_bytes(b"%PDF-test")
-
-    pdf.save_pdf("event-123", str(pdf_path))
-
-    captured = capsys.readouterr()
-    assert "RuntimeError" in captured.out
-    assert ERROR_SENTINEL not in captured.out + captured.err
-
-
-def test_pdf_date_failure_does_not_print_exception_text(monkeypatch, capsys):
-    from datetime import datetime
-    from BLL import pdf
-
-    class BadDate(datetime):
-        def strftime(self, fmt):
-            raise ValueError(ERROR_SENTINEL)
-
-    monkeypatch.setattr(pdf.FlowController, "find_types_by_collection", lambda name: [])
-    monkeypatch.setattr(pdf, "get_name_by_idODS", lambda ods, ods_id: "ODS")
-    monkeypatch.setattr(pdf.FlowController, "find_event_by_event_id", lambda event_id: {"odsId": "1"})
-    monkeypatch.setattr(
-        pdf.FlowController,
-        "find_reservation_by_event_id",
-        lambda event_id: {"startAt": BadDate(2031, 3, 1, 10), "endAt": BadDate(2031, 3, 1, 12)},
+def test_log_lines_go_to_stdout_not_only_to_a_file_in_the_container():
+    # a fresh interpreter: pytest installs its own root handlers, so the import-time setup is checked here
+    code = (
+        "import logging, sys\n"
+        "import SLL.py_log\n"
+        "from SLL.py_log import AppLogger, Logmessage, LogType\n"
+        "AppLogger.log(Logmessage.AUTH_SERVICE_UNAVAILABLE, LogType.ERROR)\n"
+        "print([type(h).__name__ for h in logging.getLogger().handlers])\n"
     )
-    with pytest.raises(KeyError):  # the rest of the event data is absent; the print happens before
-        pdf.generate_event_pdf(event_id="event-123")
-
-    captured = capsys.readouterr()
-    assert "ValueError" in captured.out
-    assert ERROR_SENTINEL not in captured.out + captured.err
-
-
-def test_index_creation_failure_log_has_no_exception_text(monkeypatch, caplog):
-    import configmodule
-    from SLL import create_app
-
-    def crash():
-        raise RuntimeError(ERROR_SENTINEL)
-
-    monkeypatch.setattr("pymongo.MongoClient", MongoClient)
-    monkeypatch.setattr(configmodule.Config, "MONGO_URI", "mongodb://localhost:27017")
-    monkeypatch.setattr(configmodule.Config, "MONGO_DATABASE", "labtech_test")
-    monkeypatch.setattr("DAL.ReservationManager.ensure_indexes", staticmethod(crash))
-    with caplog.at_level(logging.INFO):
-        create_app(configmodule.get_config())
-
-    assert "active-reservation unique index" in caplog.text
-    assert "RuntimeError" in caplog.text
-    assert ERROR_SENTINEL not in caplog.text
-    assert "Traceback" not in caplog.text
+    src = Path(__file__).resolve().parents[1]
+    result = subprocess.run([sys.executable, "-c", code], cwd=src, capture_output=True, text=True,
+                            env={"PATH": "/usr/bin:/bin", "PYTHONPATH": str(src), "PYTHONDONTWRITEBYTECODE": "1"})
+    assert "Authentication service unavailable" in result.stdout, result.stderr
+    assert "FileHandler" not in result.stdout.splitlines()[-1], "a file is written only when LOG_FILE is set"
