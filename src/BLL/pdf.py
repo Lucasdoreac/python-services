@@ -112,7 +112,7 @@ def generate_event_pdf(event_id,data: Dict[str, Any] = None):
         if isinstance(end_at, datetime):
             hora_final = end_at.strftime("%H:%M")
     except Exception as e:
-        print(f"Erro ao processar data/hora da reserva: {e}")
+        print(f"Erro ao processar data/hora da reserva: {type(e).__name__}")
 
     # Define valores padrão para campos que podem não ter sido informados
     entrepreneurial_path = event_data['entrepreneuralPath'] or "Não associado a trilha empreendedora"
@@ -369,7 +369,7 @@ def save_pdf(event_id, local_pdf_path):
             )
             pdf_data["path"] = f"{public_url}/{bucket_name}/{object_name}"
         except Exception as exc:
-            print("MinIO upload failed; PDF remains stored in Mongo:", exc)
+            print("MinIO upload failed; PDF remains stored in Mongo:", type(exc).__name__)
 
     reservation_manager.insert_pdf(pdf_data)
 

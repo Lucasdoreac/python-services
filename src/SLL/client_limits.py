@@ -6,6 +6,7 @@ fixed windows: each Gunicorn worker counts on its own (the effective limit is
 the configured one times the workers) and a restart resets them.
 """
 
+import ipaddress
 import os
 import threading
 import time
@@ -22,7 +23,24 @@ def window_seconds():
 
 
 def client_ip(request):
-    """Client address behind the platform proxy (see TRUSTED_PROXY_HOPS)."""
+    """Client address for per-client limits.
+
+    Order: the platform's True-Client-IP header, then X-Forwarded-For, then the
+    socket address. Measured on Render: X-Forwarded-For arrives as
+    [values sent by the client, real client, two private hops], because each
+    hop appends, so the entry TRUSTED_PROXY_HOPS places from the right
+    (default 1) is a private proxy, not the client. True-Client-IP is set by the
+    platform to the real client and a client-sent value is overwritten. The
+    socket address is always the local proxy. Health checks carry no forwarding
+    headers. TRUSTED_PROXY_HOPS only applies when the platform header is absent
+    or invalid (other proxies, local runs).
+    """
+    platform = (request.headers.get("True-Client-IP") or "").strip()[:64]
+    if platform:
+        try:
+            return str(ipaddress.ip_address(platform))
+        except ValueError:
+            pass
     try:
         hops = max(0, int(os.getenv("TRUSTED_PROXY_HOPS", "1")))
     except ValueError:

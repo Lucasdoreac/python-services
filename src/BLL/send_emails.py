@@ -119,7 +119,7 @@ def send_to_coordenacao(event_id):
     payload = {
         'subject': 'Evento para Aprovação - Coordenação',
         'content': html_content,
-        'to': ", ".join(recipients),
+        'to': list(recipients),
         'is_html': True
     }
     AppLogger.log(Logmessage.SENDING_EMAIL, LogType.INFO, email=recipients, event=event_id)
@@ -188,7 +188,7 @@ def send_to_reitoria(event_id):
     payload = {
         'subject': 'Evento para Aprovação - Reitoria',
         'content': html_content,
-        'to': ", ".join(emails["reitoria"]),
+        'to': list(emails["reitoria"]),
         'is_html': True
     }
     AppLogger.log(Logmessage.SENDING_EMAIL, LogType.INFO, email=emails["reitoria"], event=event_id)
@@ -242,7 +242,7 @@ def send_reservation_info_to_reitoria(event_id, reservation_date=None, classific
                     if isinstance(campus_obj, dict):
                         campus_name = campus_obj.get("name", None)
             except Exception as e:
-                AppLogger.log(f"Error finding room: {str(e)}", LogType.ERROR, room_id=room_id)
+                AppLogger.log(f"Error finding room: {type(e).__name__}", LogType.ERROR, room_id=room_id)
 
     # 6. Format reservation date
     formatted_reservation_date = "Não informada"
@@ -275,7 +275,7 @@ def send_reservation_info_to_reitoria(event_id, reservation_date=None, classific
     payload = {
         'subject': 'Nova Reserva Criada',
         'content': html_content,
-        'to': ", ".join(emails["reitoria"]),
+        'to': list(emails["reitoria"]),
         'is_html': True
     }
     AppLogger.log(
@@ -283,7 +283,6 @@ def send_reservation_info_to_reitoria(event_id, reservation_date=None, classific
         LogType.INFO,
         email=emails["reitoria"],
         event=event_id,
-        message="Notification of new reservation"
     )
 
     return send_email(payload)

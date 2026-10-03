@@ -148,7 +148,7 @@ class ReservationManager:
             room_ids = [doc["roomId"] for doc in results]
             return room_ids
         except Exception as e:
-            print(f"Erro na busca: {e}")
+            print(f"Erro na busca: {type(e).__name__}")
             return []
 
     def insert_event(self, event_data):
@@ -187,26 +187,34 @@ class ReservationManager:
         """
         try:
             from bson import ObjectId
+            from pymongo import ReturnDocument
             # The status is part of the filter, so the check and the write are
             # one operation: a concurrent submit or approval makes this match nothing.
-            result = self.events_collection.update_one(
+            # The document before the write tells which status to restore if the
+            # reservation write below fails.
+            before = self.events_collection.find_one_and_update(
                 {
                     "_id": ObjectId(event_id),
                     "status": {"$in": [*EDITABLE_EVENT_STATUSES, None]},
                 },
-                {"$set": event_data}
+                {"$set": event_data},
+                projection={"status": 1},
+                return_document=ReturnDocument.BEFORE,
             )
-            if result.matched_count == 0:
+            if before is None:
                 raise EventNotEditable(event_id)
-            self.reservation_collection.update_many(
-                {"eventId": event_id},
-                {"$set": {"status": event_data.get("status")}}
-            )
-            if result.modified_count > 0:
-                return event_id
-            else:
-                # Se nenhum documento foi modificado, pode significar que os dados são idênticos
-                return event_id
+            try:
+                self.reservation_collection.update_many(
+                    {"eventId": event_id},
+                    {"$set": {"status": event_data.get("status")}}
+                )
+            except Exception:
+                # Event and reservation are separate writes: if the reservation one fails, put the
+                # event's status back (only while it still holds the value this call wrote) so the
+                # two never disagree, then let the failure surface as before.
+                self._restore_event_status(event_id, event_data.get("status"), before.get("status"))
+                raise
+            return event_id
         except EventNotEditable:
             raise
         except Exception as e:
@@ -215,6 +223,16 @@ class ReservationManager:
                           event_id=event_id, reservation_id=event_data.get("reservationId"),
                           status=event_data.get("status"))
             raise e
+
+    def _restore_event_status(self, event_id, written_status, previous_status):
+        from bson import ObjectId
+        change = {"$set": {"status": previous_status}} if previous_status is not None else {"$unset": {"status": ""}}
+        try:
+            self.events_collection.update_one(
+                {"_id": ObjectId(event_id), "status": written_status}, change)
+        except Exception as error:  # the original failure is the one to report
+            AppLogger.log(Logmessage.UPDATING_EVENT_STATUS, LogType.ERROR,
+                          event_id=event_id, reservation_id=None, status=f"restore failed: {type(error).__name__}")
 
     def activate_approval_token_group(self, event_id, step, expected_status, group_id):
         """Set the only valid token group for an event's current approval stage."""
