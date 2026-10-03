@@ -107,14 +107,16 @@ def test_event_without_stored_status_is_still_editable(client):
 def fail_reservation_writes(monkeypatch):
     import mongomock.collection as mc
 
-    real = mc.Collection.update_one
+    def failing(real):
+        def write(self, filter, update, *args, **kwargs):
+            if self.name == "reservations":
+                raise RuntimeError("reservation write failed")
+            return real(self, filter, update, *args, **kwargs)
+        return write
 
-    def update_one(self, filter, update, *args, **kwargs):
-        if self.name == "reservations":
-            raise RuntimeError("reservation write failed")
-        return real(self, filter, update, *args, **kwargs)
-
-    monkeypatch.setattr(mc.Collection, "update_one", update_one)
+    # the lane writes the reservation with update_one or update_many depending on the branch
+    for name in ("update_one", "update_many"):
+        monkeypatch.setattr(mc.Collection, name, failing(getattr(mc.Collection, name)))
 
 
 def test_a_failed_reservation_write_puts_the_events_status_back(client, monkeypatch):
@@ -140,17 +142,18 @@ def test_the_restore_does_not_overwrite_a_status_someone_else_set_meanwhile(clie
     event_id = create_draft(client)
     MongoDBConnectionFactory.get_db().reservations.insert_one(
         {"eventId": event_id, "roomId": "r1", "status": "draft"})
-    real = mc.Collection.update_one
+    def racing(real):
+        def write(self, filter, update, *args, **kwargs):
+            if self.name == "reservations":
+                # a concurrent approval moves the event on, then the reservation write fails
+                MongoDBConnectionFactory.get_db().events.update_one(
+                    {"_id": ObjectId(event_id)}, {"$set": {"status": "approved_by_coordenacao"}})
+                raise RuntimeError("reservation write failed")
+            return real(self, filter, update, *args, **kwargs)
+        return write
 
-    def update_one(self, filter, update, *args, **kwargs):
-        if self.name == "reservations":
-            # a concurrent approval moves the event on, then the reservation write fails
-            MongoDBConnectionFactory.get_db().events.update_one(
-                {"_id": ObjectId(event_id)}, {"$set": {"status": "approved_by_coordenacao"}})
-            raise RuntimeError("reservation write failed")
-        return real(self, filter, update, *args, **kwargs)
-
-    monkeypatch.setattr(mc.Collection, "update_one", update_one)
+    for name in ("update_one", "update_many"):
+        monkeypatch.setattr(mc.Collection, name, racing(getattr(mc.Collection, name)))
     import pytest
     with pytest.raises(RuntimeError):
         ReservationManager().update_event(event_id, {"status": "waiting"})
