@@ -7,6 +7,7 @@ from unittest.mock import Mock
 import pytest
 import requests
 from mongomock import MongoClient
+from urllib3.exceptions import ProtocolError
 
 from configmodule import get_config
 from DAL import MongoDBConnectionFactory
@@ -148,9 +149,11 @@ class FakeSMTP:
             raise FakeSMTP.fail_login_with
         self.calls.append(("login", user, password))
 
+    refused = {}
+
     def send_message(self, message, to_addrs=None):
         self.sent.append((message, to_addrs))
-        return {}
+        return dict(FakeSMTP.refused)
 
 
 class FakeSMTPSSL(FakeSMTP):
@@ -159,7 +162,7 @@ class FakeSMTPSSL(FakeSMTP):
 
 @pytest.fixture
 def smtp(monkeypatch):
-    FakeSMTP.instances, FakeSMTP.fail_login_with = [], None
+    FakeSMTP.instances, FakeSMTP.fail_login_with, FakeSMTP.refused = [], None, {}
     monkeypatch.setattr("SLL.email_routes.smtplib.SMTP", FakeSMTP)
     monkeypatch.setattr("SLL.email_routes.smtplib.SMTP_SSL", FakeSMTPSSL)
     return FakeSMTP
@@ -172,6 +175,7 @@ def enable_email(monkeypatch, **env):
     for name in (
         "BREVO_API_KEY", "BREVO_SENDER_EMAIL", "EMAIL_PROVIDER", "SMTP_HOST", "SMTP_PORT",
         "SMTP_USER", "SMTP_PASSWORD", "SMTP_SENDER_EMAIL", "SMTP_SENDER_NAME", "SMTP_STARTTLS",
+        "FLASK_ENV",
     ):
         monkeypatch.delenv(name, raising=False)
     for name, value in env.items():
@@ -295,8 +299,14 @@ def test_smtp_port_465_uses_implicit_tls_and_skips_starttls(client, monkeypatch,
     assert "starttls" not in session.calls
 
 
-def test_smtp_starttls_can_be_disabled_for_local_sinks(client, monkeypatch, smtp):
-    enable_email(monkeypatch, SMTP_PORT="1025", SMTP_STARTTLS="false", **SMTP_ENV)
+@pytest.mark.parametrize("host", ["localhost", "127.0.0.1", "mailpit"])
+def test_smtp_starttls_can_be_disabled_only_for_a_local_sink_in_development(
+    client, monkeypatch, smtp, host
+):
+    enable_email(
+        monkeypatch, SMTP_PORT="1025", SMTP_STARTTLS="false", FLASK_ENV="development",
+        **{**SMTP_ENV, "SMTP_HOST": host},
+    )
 
     response = send(client)
 
@@ -304,6 +314,105 @@ def test_smtp_starttls_can_be_disabled_for_local_sinks(client, monkeypatch, smtp
     (session,) = smtp.instances
     assert session.port == 1025
     assert "starttls" not in session.calls
+
+
+@pytest.mark.parametrize(
+    "env",
+    [
+        {"SMTP_HOST": "smtp.example.test", "FLASK_ENV": "development"},  # external host
+        {"SMTP_HOST": "localhost", "FLASK_ENV": "production"},  # not development
+        {"SMTP_HOST": "mailpit"},  # FLASK_ENV unset
+        {"SMTP_HOST": "10.0.0.5", "FLASK_ENV": "development"},  # private, not loopback
+    ],
+)
+def test_smtp_without_tls_is_refused_and_never_sends_credentials(client, monkeypatch, smtp, caplog, env):
+    enable_email(
+        monkeypatch, SMTP_PORT="587", SMTP_STARTTLS="false", **{**SMTP_ENV, **env}
+    )
+
+    with caplog.at_level(logging.INFO):
+        response = send(client)
+
+    assert response.status_code == 503
+    assert smtp.instances == []  # no connection, hence no login or message in clear text
+    assert "app-password-secret" not in caplog.text
+
+
+def test_smtp_port_465_ignores_starttls_false_and_stays_on_implicit_tls(client, monkeypatch, smtp):
+    enable_email(
+        monkeypatch, SMTP_PORT="465", SMTP_STARTTLS="false",
+        **{**SMTP_ENV, "SMTP_HOST": "smtp.example.test"},
+    )
+
+    response = send(client)
+
+    assert response.status_code == 200
+    assert smtp.instances[0].implicit_tls is True
+
+
+def test_smtp_partial_refusal_is_reported_as_partial_not_sent(client, monkeypatch, smtp):
+    smtp.refused = {"bad@example.test": (550, b"no such user")}
+    enable_email(monkeypatch, EMAIL_PROVIDER="smtp", **SMTP_ENV)
+
+    response = send(client, to=["user@example.test", "bad@example.test"])
+
+    assert response.status_code == 200
+    assert response.get_json() == {"status": "partial", "provider": "smtp", "refused": 1}
+
+
+def test_smtp_all_recipients_refused_is_a_failure(client, monkeypatch, smtp):
+    def refuse_all(self, message, to_addrs=None):
+        raise smtplib.SMTPRecipientsRefused({"user@example.test": (550, b"no")})
+
+    monkeypatch.setattr(FakeSMTP, "send_message", refuse_all)
+    enable_email(monkeypatch, EMAIL_PROVIDER="smtp", **SMTP_ENV)
+
+    response = send(client)
+
+    assert response.status_code == 502
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        requests.ReadTimeout("read timed out"),
+        requests.ConnectionError(ProtocolError("Connection aborted.", ConnectionResetError())),
+    ],
+)
+def test_ambiguous_brevo_failure_does_not_fall_back_to_smtp(client, monkeypatch, smtp, caplog, failure):
+    post = Mock(side_effect=failure)
+    monkeypatch.setattr("SLL.email_routes.requests.post", post)
+    enable_email(monkeypatch, **BREVO_ENV, **SMTP_ENV)
+
+    with caplog.at_level(logging.INFO):
+        response = send(client)
+
+    assert response.status_code == 502
+    assert smtp.instances == []
+    assert type(failure).__name__ in caplog.text
+
+
+@pytest.mark.parametrize("status", [400, 500, 503])
+def test_brevo_http_error_response_falls_back_to_smtp(client, monkeypatch, smtp, status):
+    error_response = Mock(status_code=status)
+    post = Mock(return_value=Mock(
+        raise_for_status=Mock(side_effect=requests.HTTPError(response=error_response))
+    ))
+    monkeypatch.setattr("SLL.email_routes.requests.post", post)
+    enable_email(monkeypatch, **BREVO_ENV, **SMTP_ENV)
+
+    response = send(client)
+
+    assert response.get_json() == {"status": "sent", "provider": "smtp"}
+
+
+def test_brevo_connect_timeout_falls_back_to_smtp(client, monkeypatch, smtp):
+    monkeypatch.setattr(
+        "SLL.email_routes.requests.post", Mock(side_effect=requests.ConnectTimeout("connect"))
+    )
+    enable_email(monkeypatch, **BREVO_ENV, **SMTP_ENV)
+
+    assert send(client).get_json() == {"status": "sent", "provider": "smtp"}
 
 
 def test_smtp_sender_defaults_to_the_login_and_can_be_overridden(client, monkeypatch, smtp):
