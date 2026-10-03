@@ -76,7 +76,7 @@ class AuthenticationController:
         """Ask the Auth service to delete this session (204), without ever echoing the token."""
         url = f"{os.getenv('URL_AUTH')}/auth/logout"
         outcome, response = call_auth("POST", url, json={"email": email, "token": token},
-                                      retry_read_timeouts=False)
+                                      headers=forward_headers(), retry_read_timeouts=False)
         if outcome == UNAVAILABLE:
             AppLogger.log(Logmessage.AUTH_SERVICE_UNAVAILABLE, LogType.ERROR, email=email)
             return Response(

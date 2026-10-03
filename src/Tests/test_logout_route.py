@@ -91,3 +91,10 @@ def test_logout_is_limited_per_client(monkeypatch):
     codes = [client.post("/auth/logout", json=BODY).status_code for _ in range(LOGOUT_PER_CLIENT + 3)]
     assert codes[:LOGOUT_PER_CLIENT] == [204] * LOGOUT_PER_CLIENT and codes[LOGOUT_PER_CLIENT:] == [429] * 3
     assert len(seen) == LOGOUT_PER_CLIENT
+
+
+def test_logout_forwards_the_client_to_the_auth_like_the_other_calls(monkeypatch):
+    monkeypatch.setenv("AUTH_FORWARD_KEY", "k")
+    client, seen = make_client(monkeypatch)
+    client.post("/auth/logout", json=BODY, headers={"X-Forwarded-For": "203.0.113.9"})
+    assert seen[0][2]["headers"] == {"X-Client-IP": "203.0.113.9", "X-Forward-Key": "k"}
