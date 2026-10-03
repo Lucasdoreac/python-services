@@ -63,7 +63,6 @@ class TypesRoutes:
             AppLogger.log(
                 Logmessage.TYPES_NOT_FOUND,
                 LogType.INFO,
-                ip_address=request.remote_addr,
             )
             return jsonify({'error': "Type not found"}), 404
 
@@ -85,7 +84,6 @@ class TypesRoutes:
         AppLogger.log(
             Logmessage.TYPES_NOT_FOUND,
             LogType.INFO,
-            ip_address=request.remote_addr,
         )
         return jsonify({'error': "types not found"}), 404
 
@@ -101,7 +99,6 @@ class TypesRoutes:
         AppLogger.log(
             Logmessage.TYPES_NOT_FOUND,
             LogType.INFO,
-            ip_address=request.remote_addr,
         )
         return jsonify({'error': "types not found"}), 404
 
@@ -126,7 +123,6 @@ class TypesRoutes:
             AppLogger.log(
                 Logmessage.TYPES_NOT_FOUND,
                 LogType.INFO,
-                ip_address=request.remote_addr,
             )
 
             return jsonify({'error': "Type not found"}), 404

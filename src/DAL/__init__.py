@@ -1,8 +1,5 @@
 from .collections_repositories import (UniversityRepository, BuildingsRepository, RoomsRepository, TypesRepository,
                       ReservationsRepository)
-from .reservation_manager import (
-    ReservationManager,
-    ReservationConflict,
-    ReservationLockTimeout,
-)
+from .reservation_manager import (EDITABLE_EVENT_STATUSES, EventNotEditable, ReservationConflict,
+                                  ReservationLockTimeout, ReservationManager)
 from .mongodb_factory import MongoDBConnectionFactory

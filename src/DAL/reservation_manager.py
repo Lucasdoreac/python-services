@@ -20,6 +20,15 @@ ACTIVE_RESERVATION_STATUSES = [
 ]
 
 
+# Statuses in which the organizer may still edit or submit an event. Events
+# stored without a status are drafts.
+EDITABLE_EVENT_STATUSES = frozenset({EventStatus.DRAFT.value, EventStatus.REQUESTED_CHANGE.value})
+
+
+class EventNotEditable(Exception):
+    """O evento mudou de status e não aceita mais edição ou envio."""
+
+
 class ReservationConflict(ValueError):
     """A sala já está reservada no horário solicitado."""
 
@@ -175,6 +184,13 @@ class ReservationManager:
     def delete_reservation(self, reservation_id):
         self.reservation_collection.delete_one({"_id": reservation_id})
 
+    def find_reservation_ids_of_event(self, event_id):
+        return [r["_id"] for r in self.reservation_collection.find({"eventId": event_id}, {"_id": 1})]
+
+    def delete_reservations(self, reservation_ids):
+        if reservation_ids:
+            self.reservation_collection.delete_many({"_id": {"$in": list(reservation_ids)}})
+
     def find_unavailable_room_ids_by_date(self, date_str: str, time_str: str):
         """
         Recebe uma data no formato 'YYYY-MM-DD' e um horário no formato 'HH:MM:SS'
@@ -204,7 +220,7 @@ class ReservationManager:
             room_ids = [doc["roomId"] for doc in results]
             return room_ids
         except Exception as e:
-            print(f"Erro na busca: {e}")
+            print(f"Erro na busca: {type(e).__name__}")
             return []
 
     def insert_event(self, event_data):
@@ -243,25 +259,52 @@ class ReservationManager:
         """
         try:
             from bson import ObjectId
-            result = self.events_collection.update_one(
-                {"_id": ObjectId(event_id)},
-                {"$set": event_data}
+            from pymongo import ReturnDocument
+            # The status is part of the filter, so the check and the write are
+            # one operation: a concurrent submit or approval makes this match nothing.
+            # The document before the write tells which status to restore if the
+            # reservation write below fails.
+            before = self.events_collection.find_one_and_update(
+                {
+                    "_id": ObjectId(event_id),
+                    "status": {"$in": [*EDITABLE_EVENT_STATUSES, None]},
+                },
+                {"$set": event_data},
+                projection={"status": 1},
+                return_document=ReturnDocument.BEFORE,
             )
-            self.reservation_collection.update_one(
-                {"eventId": event_id},
-                {"$set": {"status": event_data.get("status")}}
-            )
-            if result.modified_count > 0:
-                return event_id
-            else:
-                # Se nenhum documento foi modificado, pode significar que os dados são idênticos
-                return event_id
+            if before is None:
+                raise EventNotEditable(event_id)
+            try:
+                self.reservation_collection.update_many(
+                    {"eventId": event_id},
+                    {"$set": {"status": event_data.get("status")}}
+                )
+            except Exception:
+                # Event and reservation are separate writes: if the reservation one fails, put the
+                # event's status back (only while it still holds the value this call wrote) so the
+                # two never disagree, then let the failure surface as before.
+                self._restore_event_status(event_id, event_data.get("status"), before.get("status"))
+                raise
+            return event_id
+        except EventNotEditable:
+            raise
         except Exception as e:
             # log the error
             AppLogger.log(Logmessage.UPDATING_EVENT_STATUS, LogType.ERROR,
                           event_id=event_id, reservation_id=event_data.get("reservationId"),
                           status=event_data.get("status"))
             raise e
+
+    def _restore_event_status(self, event_id, written_status, previous_status):
+        from bson import ObjectId
+        change = {"$set": {"status": previous_status}} if previous_status is not None else {"$unset": {"status": ""}}
+        try:
+            self.events_collection.update_one(
+                {"_id": ObjectId(event_id), "status": written_status}, change)
+        except Exception as error:  # the original failure is the one to report
+            AppLogger.log(Logmessage.UPDATING_EVENT_STATUS, LogType.ERROR,
+                          event_id=event_id, reservation_id=None, status=f"restore failed: {type(error).__name__}")
 
     def activate_approval_token_group(self, event_id, step, expected_status, group_id):
         """Set the only valid token group for an event's current approval stage."""
@@ -283,13 +326,21 @@ class ReservationManager:
 
     def transition_event_status(
         self, event_id: str, token_id: str, action: str, expected_status: str,
-        new_status: str, step: int, group_id: str
+        new_status: str, step: int, group_id: str, extra_event_fields: dict | None = None
     ):
-        """Consume a scoped token and transition its event/reservation together."""
+        """Consume a scoped token and transition its event/reservation together.
+
+        ``extra_event_fields`` are written with the new status and removed again by the
+        compensations, so a failed reservation update leaves no trace of them.
+        """
         from bson import ObjectId
         from pymongo.errors import PyMongoError
 
         group_key = f"approvalTokenGroups.{int(step)}"
+        extra = extra_event_fields or {}
+        restore = {"$set": {"status": expected_status, group_key: group_id}}
+        if extra:
+            restore["$unset"] = {key: "" for key in extra}
 
         class TransitionConflict(Exception):
             pass
@@ -315,7 +366,7 @@ class ReservationManager:
 
             event = self.events_collection.update_one(
                 {"_id": ObjectId(event_id), "status": expected_status, group_key: group_id},
-                {"$set": {"status": new_status}, "$unset": {group_key: ""}},
+                {"$set": {"status": new_status, **extra}, "$unset": {group_key: ""}},
                 **options,
             )
             if event.modified_count != 1:
@@ -364,7 +415,7 @@ class ReservationManager:
             if state["event_changed"] and not state["reservation_changed"]:
                 self.events_collection.update_one(
                     {"_id": ObjectId(event_id), "status": new_status, group_key: {"$exists": False}},
-                    {"$set": {"status": expected_status, group_key: group_id}},
+                    restore,
                 )
             current = self.events_collection.find_one(
                 {"_id": ObjectId(event_id), "status": expected_status, group_key: group_id}
@@ -386,7 +437,7 @@ class ReservationManager:
             if state["event_changed"] and not state["reservation_changed"]:
                 self.events_collection.update_one(
                     {"_id": ObjectId(event_id), "status": new_status, group_key: {"$exists": False}},
-                    {"$set": {"status": expected_status, group_key: group_id}},
+                    restore,
                 )
                 self.send_email_collection.update_one(
                     {

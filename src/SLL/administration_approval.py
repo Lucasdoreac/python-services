@@ -4,7 +4,7 @@ from bson import ObjectId
 from BLL import send_to_reitoria, send_to_coordenacao, send_reservation_info_to_reitoria
 from SLL.auth_decorators import token_required
 from BLL.index import FlowController
-from BLL.send_emails import verify_token_from_email, perform_approval_action
+from BLL.send_emails import verify_token_from_email, perform_approval_action, MAX_CHANGE_MESSAGE
 
 # Create a blueprint for handling templates and related routes.
 templates_bp = Blueprint('templates_bp', __name__, template_folder='../templates')
@@ -29,24 +29,42 @@ def _approval_action(action):
 
     step = int(token["step"])
     who = "Coordenação" if step == 0 else "Reitoria"
-    if request.method == "GET":
-        labels = {
-            "approve": "aprovar este evento",
-            "reject": "rejeitar este evento",
-        }
-        return secure(render_template(
+    labels = {
+        "approve": "aprovar este evento",
+        "reject": "rejeitar este evento",
+        "request_changes": "solicitar alterações neste evento",
+    }
+
+    def confirmation(status=200, message=None, error=None):
+        return secure((render_template(
             "email/confirmar_acao.html",
             event_id=event_id,
             token_id=token_id,
             action=action,
             action_label=labels[action],
             who=who,
-        ))
+            message=message,
+            error=error,
+        ), status))
 
-    result = perform_approval_action(event_id, token_id, action)
+    if request.method == "GET":
+        return confirmation()
+
+    message = None
+    if action == "request_changes":
+        message = (request.form.get("message") or "").strip()
+        if not 1 <= len(message) <= MAX_CHANGE_MESSAGE:
+            # refused before the token is consumed: the coordinator can fix the text and send again
+            return confirmation(400, message, f"Descreva as alterações (até {MAX_CHANGE_MESSAGE} caracteres).")
+
+    result = perform_approval_action(event_id, token_id, action, message=message)
     if not result:
         return secure((jsonify({'error': 'A etapa do evento mudou ou o link já foi utilizado'}), 409))
-    return secure("Evento aprovado!" if action == "approve" else "Evento rejeitado!")
+    return secure({
+        "approve": "Evento aprovado!",
+        "reject": "Evento rejeitado!",
+        "request_changes": "Solicitação de alterações registrada.",
+    }[action])
 
 
 @templates_bp.route('/administration_approval', methods=['GET', 'POST'])
@@ -77,10 +95,7 @@ def reject():
 
 @templates_bp.route('/request_changes', methods=['GET', 'POST'])
 def request_changes():
-    return make_response(
-        jsonify({'error': 'A opção de solicitar alterações está temporariamente indisponível'}),
-        410,
-    )
+    return _approval_action("request_changes")
 
 
 @templates_bp.route('/notify_reservation', methods=['GET'])
