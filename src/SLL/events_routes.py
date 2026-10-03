@@ -5,7 +5,7 @@ from flask import Blueprint, Response, jsonify, request, make_response
 from flasgger import swag_from
 
 from utils.enums import EventStatus
-from DAL import ReservationConflict, ReservationManager
+from DAL import EDITABLE_EVENT_STATUSES, ReservationConflict, ReservationManager
 from .swagger_docs import get_swagger_specification
 from BLL import FlowController,pdf
 from .auth_decorators import token_required
@@ -52,7 +52,7 @@ def _status_code(result):
 # after that comes from the approval flow. Editing or submitting is possible
 # only while the event is a draft or the coordination asked for changes.
 CLIENT_STATUSES = frozenset({EventStatus.DRAFT.value, 'requested'})
-EDITABLE_STATUSES = frozenset({EventStatus.DRAFT.value, EventStatus.REQUESTED_CHANGE.value})
+EDITABLE_STATUSES = EDITABLE_EVENT_STATUSES
 
 
 def event_status_gate(event_id, data):
@@ -89,7 +89,7 @@ def update_and_start_approval(event_id, data):
                     Logmessage.EVENT_APPROVAL_START_FAILED,
                     LogType.ERROR,
                     event_id=data.get('eventId'),
-                    error=error,
+                    error=type(error).__name__,
                     ip_address=request.remote_addr,
                 )
             return result
@@ -105,7 +105,7 @@ def update_and_start_approval(event_id, data):
                     Logmessage.EVENT_APPROVAL_START_FAILED,
                     LogType.ERROR,
                     event_id=data.get('eventId'),
-                    error=error,
+                    error=type(error).__name__,
                     ip_address=request.remote_addr,
                 )
             return result
@@ -139,8 +139,10 @@ class EventsRoutes:
             return response
         except Exception as error:
             AppLogger.log(
-                f"Erro ao buscar PDF do evento: {error}",
+                Logmessage.EVENT_PDF_FETCH_FAILED,
                 LogType.ERROR,
+                event_id=event_id,
+                error=type(error).__name__,
                 ip_address=request.remote_addr,
             )
             return jsonify({'error': 'Internal Server Error'}), 500
@@ -208,9 +210,10 @@ class EventsRoutes:
 
         except Exception as error:
             AppLogger.log(
-            f"Erro interno: {error}",
-            LogType.ERROR,
-            ip_address=request.remote_addr,
+                Logmessage.EVENTS_LIST_FAILED,
+                LogType.ERROR,
+                error=type(error).__name__,
+                ip_address=request.remote_addr,
             )
             return jsonify({'error': 'Internal Server Error'}), 500
 

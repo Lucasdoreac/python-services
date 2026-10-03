@@ -75,9 +75,9 @@ class ResourcesRoutes:
                 message=Logmessage.INTERNAL_APIS_CRASHED,
                 log_type=LogType.ERROR,
                 ip_address=request.remote_addr,
-                payload=request.data,
+                payload=f"body_length={len(request.data or b'')}",
                 endpoint=request.path,
-                error=str(e),
+                error=type(e).__name__,
             )
             return jsonify({"error": "Impossível fazer essa pesquisa de sala"}), 500
 
