@@ -100,3 +100,71 @@ def test_event_without_stored_status_is_still_editable(client):
 
     assert response.status_code == 200
     assert event_document(event_id)["name"] == "Sem status"
+
+
+# --- the event and its reservation never disagree when the reservation write fails ----------
+
+def fail_reservation_writes(monkeypatch):
+    import mongomock.collection as mc
+
+    real = mc.Collection.update_one
+
+    def update_one(self, filter, update, *args, **kwargs):
+        if self.name == "reservations":
+            raise RuntimeError("reservation write failed")
+        return real(self, filter, update, *args, **kwargs)
+
+    monkeypatch.setattr(mc.Collection, "update_one", update_one)
+
+
+def test_a_failed_reservation_write_puts_the_events_status_back(client, monkeypatch):
+    from DAL.reservation_manager import ReservationManager
+
+    event_id = create_draft(client)
+    MongoDBConnectionFactory.get_db().reservations.insert_one(
+        {"eventId": event_id, "roomId": "r1", "status": "draft"})
+    fail_reservation_writes(monkeypatch)
+
+    import pytest
+    with pytest.raises(RuntimeError):
+        ReservationManager().update_event(event_id, {"status": "waiting"})
+
+    assert event_document(event_id)["status"] == "draft"
+    assert [r["status"] for r in reservations(event_id)] == ["draft"]
+
+
+def test_the_restore_does_not_overwrite_a_status_someone_else_set_meanwhile(client, monkeypatch):
+    import mongomock.collection as mc
+    from DAL.reservation_manager import ReservationManager
+
+    event_id = create_draft(client)
+    MongoDBConnectionFactory.get_db().reservations.insert_one(
+        {"eventId": event_id, "roomId": "r1", "status": "draft"})
+    real = mc.Collection.update_one
+
+    def update_one(self, filter, update, *args, **kwargs):
+        if self.name == "reservations":
+            # a concurrent approval moves the event on, then the reservation write fails
+            MongoDBConnectionFactory.get_db().events.update_one(
+                {"_id": ObjectId(event_id)}, {"$set": {"status": "approved_by_coordenacao"}})
+            raise RuntimeError("reservation write failed")
+        return real(self, filter, update, *args, **kwargs)
+
+    monkeypatch.setattr(mc.Collection, "update_one", update_one)
+    import pytest
+    with pytest.raises(RuntimeError):
+        ReservationManager().update_event(event_id, {"status": "waiting"})
+
+    assert event_document(event_id)["status"] == "approved_by_coordenacao"
+
+
+def test_submit_with_a_failing_reservation_write_leaves_the_event_in_draft(client, monkeypatch):
+    event_id = create_draft(client)
+    side_effects(monkeypatch)
+    fail_reservation_writes(monkeypatch)
+
+    response = client.post(
+        f"/events/{event_id}/submit", json={**EVENT, **slot()}, headers=headers(OWNER))
+
+    assert response.status_code >= 500 or response.status_code == 409, response.status_code
+    assert event_document(event_id)["status"] == "draft"
