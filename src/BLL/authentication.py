@@ -44,7 +44,7 @@ class AuthenticationController:
             )
             return flask_response
         except requests.exceptions.RequestException as e:
-            AppLogger.log(Logmessage.AUTH_SERVICE_UNAVAILABLE, LogType.ERROR, error=str(e))
+            AppLogger.log(Logmessage.AUTH_SERVICE_UNAVAILABLE, LogType.ERROR, error=type(e).__name__)
             return Response(
                 response=jsonify({"error": "Service unavailable"}).get_data(as_text=True),
                 status=503,
