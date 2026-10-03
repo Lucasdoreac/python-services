@@ -86,7 +86,26 @@ def _note(method, url, attempt, outcome, response=None):
     print(f"auth_upstream: {method} host={urlsplit(url).netloc} attempt={attempt} transient={outcome}{extra}", flush=True)
 
 
-def call_auth(method, url, *, params=None, json=None, retry_read_timeouts=True,
+def forward_headers(request=None):
+    """Tell the Auth service which client is behind this call (see Auth ``rate_limit.subject_ip``).
+
+    Every call reaches the Auth from this API's address, so without this its per-person
+    limits cannot tell people apart. Sent only when ``AUTH_FORWARD_KEY`` is configured (on
+    both services); with no key, or outside a request, nothing is added.
+    """
+    key = os.getenv("AUTH_FORWARD_KEY", "")
+    if not key:
+        return {}
+    if request is None:
+        from flask import has_request_context, request as current
+        if not has_request_context():
+            return {}
+        request = current
+    from SLL import client_limits
+    return {"X-Client-IP": client_limits.client_ip(request), "X-Forward-Key": key}
+
+
+def call_auth(method, url, *, params=None, json=None, headers=None, retry_read_timeouts=True,
               sleep=None, clock=None):
     """Return ``(outcome, response)``; ``response`` is None when unavailable.
 
@@ -107,6 +126,8 @@ def call_auth(method, url, *, params=None, json=None, retry_read_timeouts=True,
             kwargs = {"params": params, "timeout": (CONNECT_TIMEOUT, min(15.0, remaining))}
             if json is not None:
                 kwargs["json"] = json
+            if headers:
+                kwargs["headers"] = headers
             response = getattr(requests, method.lower())(url, **kwargs)
         except requests.exceptions.ConnectionError as error:
             _note(method, url, attempt, type(error).__name__)

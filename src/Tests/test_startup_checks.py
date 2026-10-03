@@ -108,6 +108,10 @@ def exchange_client(monkeypatch, outcome):
         text = '{"token": "session-token"}'
         headers = {"Content-Type": "application/json"}
 
+        @staticmethod
+        def json():
+            return {"token": "session-token"}
+
     def fake_call(method, url, **kwargs):
         seen.append((method, url, kwargs))
         return outcome, Upstream()

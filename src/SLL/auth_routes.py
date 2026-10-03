@@ -14,6 +14,7 @@ auth_bp = Blueprint('auth', __name__)
 
 SEND_LINK_PER_CLIENT = 10
 EXCHANGE_PER_CLIENT = 60
+LOGOUT_PER_CLIENT = 60
 
 
 class AuthRoutes:
@@ -31,7 +32,6 @@ class AuthRoutes:
                 Logmessage.INVALID_EMAIL_DOMAIN,
                 LogType.INFO,
                 email=email,
-                ip_address=request.remote_addr,
             )
             return jsonify({'error': 'Invalid email domain'}), 400
 
@@ -59,12 +59,28 @@ class AuthRoutes:
         return AuthenticationController.exchange_link(email, token)
 
     @staticmethod
+    @auth_bp.route('/auth/logout', methods=['POST'])
+    def logout():
+        """End the caller's session at the Auth service (the token stops validating at once)."""
+        if client_limits.hit(f"logout:{client_limits.client_ip(request)}") > LOGOUT_PER_CLIENT:
+            response = jsonify({'error': 'Too many requests; try again later'})
+            response.headers['Retry-After'] = str(client_limits.window_seconds())
+            return response, 429
+        body = request.get_json(silent=True)
+        body = body if isinstance(body, dict) else {}
+        email = str(body.get('email') or '').strip()
+        token = body.get('token')
+        if not email or not isinstance(token, str) or not token:
+            return jsonify({'error': 'email and token are required'}), 400
+        return AuthenticationController.logout(email, token)
+
+    @staticmethod
     @auth_bp.route('/auth/validate', methods=['GET'])
     @token_required
     @swag_from(get_swagger_specification(path='auth', method='GET'))
     def validate_hash():
         AppLogger.log(Logmessage.TOKEN_VALIDATED, log_type=LogType.INFO, email=request.args.get('email'),
-                      token=request.args.get('token'), ip_address=f"{request.remote_addr}")
+                      token=request.args.get('token'))
         return jsonify(True), 200
 
 

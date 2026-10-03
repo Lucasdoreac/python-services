@@ -5,7 +5,7 @@ from flask import Blueprint, Response, jsonify, request, make_response
 from flasgger import swag_from
 
 from utils.enums import EventStatus
-from DAL import ReservationConflict, ReservationManager
+from DAL import EDITABLE_EVENT_STATUSES, ReservationConflict, ReservationManager
 from .swagger_docs import get_swagger_specification
 from BLL import FlowController,pdf
 from .auth_decorators import token_required
@@ -36,7 +36,6 @@ def owner_required(function):
                 Logmessage.EVENT_OWNER_MISMATCH,
                 LogType.WARNING,
                 event_id=event_id,
-                ip_address=request.remote_addr,
             )
             return jsonify({'error': 'Only the organizer can change this event'}), 403
         return function(event_id, *args, **kwargs)
@@ -52,7 +51,7 @@ def _status_code(result):
 # after that comes from the approval flow. Editing or submitting is possible
 # only while the event is a draft or the coordination asked for changes.
 CLIENT_STATUSES = frozenset({EventStatus.DRAFT.value, 'requested'})
-EDITABLE_STATUSES = frozenset({EventStatus.DRAFT.value, EventStatus.REQUESTED_CHANGE.value})
+EDITABLE_STATUSES = EDITABLE_EVENT_STATUSES
 
 
 def event_status_gate(event_id, data):
@@ -89,8 +88,7 @@ def update_and_start_approval(event_id, data):
                     Logmessage.EVENT_APPROVAL_START_FAILED,
                     LogType.ERROR,
                     event_id=data.get('eventId'),
-                    error=error,
-                    ip_address=request.remote_addr,
+                    error=type(error).__name__,
                 )
             return result
         if data.get('classificacao') in ['class', 'exam']:
@@ -105,8 +103,7 @@ def update_and_start_approval(event_id, data):
                     Logmessage.EVENT_APPROVAL_START_FAILED,
                     LogType.ERROR,
                     event_id=data.get('eventId'),
-                    error=error,
-                    ip_address=request.remote_addr,
+                    error=type(error).__name__,
                 )
             return result
     if data.get('status') == 'requested':
@@ -139,9 +136,10 @@ class EventsRoutes:
             return response
         except Exception as error:
             AppLogger.log(
-                f"Erro ao buscar PDF do evento: {error}",
+                Logmessage.EVENT_PDF_FETCH_FAILED,
                 LogType.ERROR,
-                ip_address=request.remote_addr,
+                event_id=event_id,
+                error=type(error).__name__,
             )
             return jsonify({'error': 'Internal Server Error'}), 500
 
@@ -166,7 +164,6 @@ class EventsRoutes:
             AppLogger.log(
                 Logmessage.MISSING_DATA,
                 LogType.INFO,
-                ip_address=request.remote_addr,
             )
             return jsonify({'error': 'Missing data'}), 400
         user_email = request.headers.get('email')
@@ -200,7 +197,6 @@ class EventsRoutes:
                 AppLogger.log(
                     Logmessage.EVENTS_NOT_FOUND,
                     LogType.INFO,
-                    ip_address=request.remote_addr,
                 )
                 return jsonify({'error': 'Events not found'}), 404
 
@@ -208,9 +204,9 @@ class EventsRoutes:
 
         except Exception as error:
             AppLogger.log(
-            f"Erro interno: {error}",
-            LogType.ERROR,
-            ip_address=request.remote_addr,
+                Logmessage.EVENTS_LIST_FAILED,
+                LogType.ERROR,
+                error=type(error).__name__,
             )
             return jsonify({'error': 'Internal Server Error'}), 500
 
@@ -238,7 +234,6 @@ class EventsRoutes:
             AppLogger.log(
                 Logmessage.MISSING_DATA,
                 LogType.INFO,
-                ip_address=request.remote_addr,
             )
             return jsonify({'error': 'Missing data'}), 400
 

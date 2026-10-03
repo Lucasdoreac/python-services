@@ -27,10 +27,12 @@ def create_app(config_class):
     from DAL import ReservationManager
     try:
         ReservationManager.ensure_indexes()
-    except Exception:
+    except Exception as error:
         import logging
-        logging.getLogger(__name__).exception(
-            "Could not create the active-reservation unique index"
+        # Class name only: a traceback would carry the driver message (URIs, values).
+        logging.getLogger(__name__).error(
+            "Could not create the active-reservation unique index (%s)",
+            type(error).__name__,
         )
 
     from .auth_routes import auth_bp

@@ -5,6 +5,7 @@ from flask import jsonify
 from datetime import datetime, timedelta
 from DAL import *
 from DAL.collections_repositories import EventsRepository
+from DAL.reservation_manager import EventNotEditable
 from SLL.cluster_api.request_methods import RestApiRequestMethods, catalog_headers
 from utils.enums import EventStatus
 
@@ -176,7 +177,7 @@ class FlowController:
         except Exception as e:
             from SLL.py_log import AppLogger, LogType
             AppLogger.log(
-                f"Erro ao buscar campus: {str(e)}",
+                f"Erro ao buscar campus: {type(e).__name__}",
                 LogType.ERROR,
             )
             return []
@@ -305,6 +306,9 @@ class FlowController:
             reservation_manager = ReservationManager()
             updated_event_id = reservation_manager.update_event(event_id, event_data)
             return jsonify({"eventId": updated_event_id}), 200
+
+        except EventNotEditable:
+            return jsonify({'error': 'The event can no longer be changed'}), 409
 
         except KeyError as e:
             error_msg = f'Missing field: {str(e)}'
