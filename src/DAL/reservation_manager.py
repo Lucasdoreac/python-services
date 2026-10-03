@@ -220,7 +220,7 @@ class ReservationManager:
             room_ids = [doc["roomId"] for doc in results]
             return room_ids
         except Exception as e:
-            print(f"Erro na busca: {e}")
+            print(f"Erro na busca: {type(e).__name__}")
             return []
 
     def insert_event(self, event_data):

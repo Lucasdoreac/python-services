@@ -137,8 +137,10 @@ class EventsRoutes:
             return response
         except Exception as error:
             AppLogger.log(
-                f"Erro ao buscar PDF do evento: {error}",
+                Logmessage.EVENT_PDF_FETCH_FAILED,
                 LogType.ERROR,
+                event_id=event_id,
+                error=type(error).__name__,
             )
             return jsonify({'error': 'Internal Server Error'}), 500
 
@@ -203,8 +205,9 @@ class EventsRoutes:
 
         except Exception as error:
             AppLogger.log(
-            f"Erro interno: {error}",
-            LogType.ERROR,
+                Logmessage.EVENTS_LIST_FAILED,
+                LogType.ERROR,
+                error=type(error).__name__,
             )
             return jsonify({'error': 'Internal Server Error'}), 500
 

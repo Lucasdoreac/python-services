@@ -41,7 +41,7 @@ class SendBlue:
             api_response = api_instance.send_transac_email(send_smtp_email)
             print(api_response)
         except ApiException as e:
-            print("Exception when calling SMTPApi->send_transac_email: %s\n" % e)
+            print("Exception when calling SMTPApi->send_transac_email: %s" % type(e).__name__)
             raise Exception(
-                "Exception when calling SMTPApi->send_transac_email: %s\n" % e
+                "Exception when calling SMTPApi->send_transac_email: %s" % type(e).__name__
             )
