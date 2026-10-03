@@ -179,8 +179,8 @@ def test_coordinator_recipients_do_not_leak_between_events(approval_client, monk
     send_emails.send_to_coordenacao(second_event)
 
     assert len(captured_payloads) == 2
-    assert captured_payloads[0]["to"] == f"teacher-{first_event}@example.test"
-    assert captured_payloads[1]["to"] == f"teacher-{second_event}@example.test"
+    assert captured_payloads[0]["to"] == [f"teacher-{first_event}@example.test"]
+    assert captured_payloads[1]["to"] == [f"teacher-{second_event}@example.test"]
 
 
 @pytest.mark.parametrize("path,other_action", [("/reject", "approve"), ("/approve", "reject")])
