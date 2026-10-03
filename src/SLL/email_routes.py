@@ -1,6 +1,7 @@
 """Authenticated HTTP endpoint for transactional email delivery."""
 
 import hmac
+import ipaddress
 import logging
 import os
 import smtplib
@@ -11,6 +12,7 @@ from typing import NamedTuple
 
 import requests
 from flask import Blueprint, jsonify, request
+from urllib3.exceptions import ProtocolError
 
 email_bp = Blueprint("email", __name__)
 logger = logging.getLogger(__name__)
@@ -25,6 +27,14 @@ class ProviderNotConfigured(Exception):
 
 class ProviderFailed(Exception):
     """The provider is configured but did not accept the message."""
+
+
+class ProviderOutcomeUnknown(ProviderFailed):
+    """The provider may have accepted the message although the call failed.
+
+    Falling back to another provider could deliver the message twice, so the
+    caller stops here instead of trying the next provider.
+    """
 
 
 class SmtpSettings(NamedTuple):
@@ -60,6 +70,38 @@ def _smtp_settings():
     )
 
 
+def _is_local_sink(host):
+    """True for loopback or a dot-less (Docker service) host name."""
+    host = host.strip().casefold().strip("[]")
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return host == "localhost" or ("." not in host and ":" not in host)
+
+
+def _plaintext_smtp_allowed(host):
+    """Plain SMTP login is accepted only for a local sink in development."""
+    return os.getenv("FLASK_ENV", "").strip().casefold() == "development" and _is_local_sink(host)
+
+
+def _brevo_certainly_not_accepted(exc):
+    """True when the failure proves Brevo did not take the message.
+
+    That holds for errors before the request was sent (connect failure or
+    connect timeout) and for an HTTP error response. A read timeout or a
+    connection dropped after sending leaves the outcome unknown.
+    """
+    if exc.response is not None:
+        return True
+    if isinstance(exc, requests.ConnectTimeout):
+        return True
+    if isinstance(exc, requests.ReadTimeout) or not isinstance(exc, requests.ConnectionError):
+        return False
+    cause = exc.args[0] if exc.args else None
+    cause = getattr(cause, "reason", cause)  # urllib3 MaxRetryError wraps the real cause
+    return not isinstance(cause, ProtocolError)
+
+
 def _send_brevo(recipients, subject, content, is_html):
     api_key = os.getenv("BREVO_API_KEY", "")
     sender_email = os.getenv("BREVO_SENDER_EMAIL", "")
@@ -83,8 +125,12 @@ def _send_brevo(recipients, subject, content, is_html):
         response.raise_for_status()
     except requests.RequestException as exc:
         status = exc.response.status_code if exc.response is not None else None
-        logger.error("Brevo transactional email request failed (status=%s)", status)
-        raise ProviderFailed() from exc
+        logger.error(
+            "Brevo transactional email request failed (%s, status=%s)", type(exc).__name__, status
+        )
+        if _brevo_certainly_not_accepted(exc):
+            raise ProviderFailed() from exc
+        raise ProviderOutcomeUnknown() from exc
 
     try:
         result = response.json() if response.content else {}
@@ -113,6 +159,12 @@ def _send_smtp(recipients, subject, content, is_html):
         logger.error("SMTP email rejected: invalid header value")
         raise ProviderFailed() from exc
 
+    if settings.port != SMTP_SSL_PORT and not settings.starttls:
+        if not _plaintext_smtp_allowed(settings.host):
+            # Never send the login or the message in clear text to a real server.
+            logger.error("SMTP refused: STARTTLS is disabled outside a local development sink")
+            raise ProviderNotConfigured()
+
     context = ssl.create_default_context()
     use_ssl = settings.port == SMTP_SSL_PORT
     try:
@@ -134,6 +186,7 @@ def _send_smtp(recipients, subject, content, is_html):
 
     if refused:
         logger.warning("SMTP server refused %d recipient(s)", len(refused))
+        return {"status": "partial", "provider": "smtp", "refused": len(refused)}
     logger.info("SMTP accepted a transactional email")
     return {"status": "sent", "provider": "smtp"}
 
@@ -143,7 +196,10 @@ def send_email():
     """Deliver transactional email through Brevo and/or SMTP, or acknowledge a dry-run.
 
     ``EMAIL_PROVIDER=smtp`` sends only through SMTP. Otherwise Brevo is tried
-    first and SMTP is used as the fallback when Brevo is not configured or fails.
+    first and SMTP is used as the fallback when Brevo is not configured or
+    certainly did not accept the message. When the outcome is unknown (read
+    timeout, connection lost after sending) the answer is 502 without fallback.
+    A partial SMTP refusal answers 200 with ``"status": "partial"``.
     """
     expected_key = os.getenv("CLOUD_FUNCTION_API_KEY", "")
     supplied_key = request.headers.get("X-API-Key", "")
@@ -185,6 +241,9 @@ def send_email():
             result = send(recipients, subject, content, is_html)
         except ProviderNotConfigured:
             continue
+        except ProviderOutcomeUnknown:
+            # At-most-once across providers: do not retry elsewhere.
+            return jsonify({"error": "Email provider request failed"}), 502
         except ProviderFailed:
             any_provider_failed = True
             continue
