@@ -57,6 +57,8 @@ class Logmessage(Enum):
     ID_NOT_INFORMED = "ID not informed or null; IP: {ip_address}; Collection: {collection}; ID: {id};"
     EVENT_OWNER_MISMATCH = "Event {event_id} update denied to a non-organizer; IP: {ip_address};"
     EVENT_APPROVAL_START_FAILED = "Event {event_id} approval start failed: {error}; IP: {ip_address};"
+    EVENT_PDF_FETCH_FAILED = "Event {event_id} PDF fetch failed: {error}; IP: {ip_address};"
+    EVENTS_LIST_FAILED = "Events listing failed: {error}; IP: {ip_address};"
 
 
 
@@ -87,8 +89,11 @@ class AppLogger:
         try:
             current_date = datetime.timestamp(datetime.now())
             timestamp = datetime.timestamp(datetime.now())
-            formatted_message = f'{current_date} - {timestamp} - {message.value.format(**kwargs)}'
+            # A plain text message (already built by the caller) is logged as is.
+            text = message.value.format(**kwargs) if isinstance(message, Logmessage) else str(message)
+            formatted_message = f'{current_date} - {timestamp} - {text}'
         except KeyError as e:
+            # {e} is only the name of the missing field (set by our code), not user data.
             logging.error(f"Erro na formatação da mensagem de log:{e}")
             return
 
