@@ -291,3 +291,63 @@ def test_put_cannot_write_status_or_change_request(client):
     event = event_document(event_id)
     assert event["status"] == "requested_change"
     assert event["changeRequest"]["message"] == "x"
+
+
+# --- two resubmissions racing for the same event --------------------------------------------
+
+def resubmit_racing(client, monkeypatch, event_id, outer_slot, inner_slot):
+    """Run a whole second resubmission after the first one read the event's reservations.
+
+    The outer request has passed the status gate and listed the old reservations; the inner
+    one then completes before the outer request inserts its own reservation and writes the event.
+    """
+    from BLL import FlowController
+
+    calls = []
+    for name in ("pdf.generate_event_pdf", "send_to_coordenacao"):
+        monkeypatch.setattr(f"SLL.events_routes.{name}", lambda _name=name, **kwargs: calls.append(_name))
+    real = FlowController.reservation_ids_of_event
+    state = {}
+
+    def list_then_race(event):
+        previous = real(event)
+        if not state:
+            state["inner"] = None  # the nested request must not race again
+            state["inner"] = client.post(
+                f"/events/{event}/submit", json={**EVENT, **inner_slot}, headers=headers(OWNER))
+        return previous
+
+    monkeypatch.setattr(FlowController, "reservation_ids_of_event", staticmethod(list_then_race))
+    outer = client.post(f"/events/{event_id}/submit", json={**EVENT, **outer_slot}, headers=headers(OWNER))
+    return outer, state["inner"], calls
+
+
+def test_concurrent_resubmits_keep_only_the_winners_reservation(client, monkeypatch):
+    event_id = create_draft(client)
+    first, outer_slot, inner_slot = slot(), slot(), slot()
+    assert client.post(f"/events/{event_id}/submit", json={**EVENT, **first}, headers=headers(OWNER)).status_code == 200
+    request_changes_on(event_id)
+
+    outer, inner, _ = resubmit_racing(client, monkeypatch, event_id, outer_slot, inner_slot)
+
+    assert inner.status_code == 200 and outer.status_code == 409
+    held = reservations(event_id)
+    assert [r["roomId"] for r in held] == [inner_slot["roomId"]]
+    assert held[0]["status"] == event_document(event_id)["status"] == "waiting"
+    # both losing slots are free again
+    other = create_draft(client, OTHER)
+    for freed in (first, outer_slot):
+        assert client.post(f"/events/{other}/submit", json={**EVENT, **freed}, headers=headers(OTHER)).status_code == 200
+        MongoDBConnectionFactory.get_db().reservations.delete_many({"eventId": other})
+        MongoDBConnectionFactory.get_db().events.update_one({"_id": ObjectId(other)}, {"$set": {"status": "draft"}})
+
+
+def test_the_losing_resubmission_sends_no_notification(client, monkeypatch):
+    event_id = create_draft(client)
+    assert client.post(f"/events/{event_id}/submit", json={**EVENT, **slot()}, headers=headers(OWNER)).status_code == 200
+    request_changes_on(event_id)
+
+    outer, inner, calls = resubmit_racing(client, monkeypatch, event_id, slot(), slot())
+
+    assert (inner.status_code, outer.status_code) == (200, 409)
+    assert calls == ["pdf.generate_event_pdf", "send_to_coordenacao"]  # only the winner's
