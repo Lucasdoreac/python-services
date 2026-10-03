@@ -7,8 +7,17 @@ import os
 import requests
 from flask import Blueprint, jsonify, request
 
+from SLL.py_log import mask_email
+
 email_bp = Blueprint("email", __name__)
 logger = logging.getLogger(__name__)
+
+
+def _allowed_recipients():
+    """Addresses from EMAIL_RECIPIENT_ALLOWLIST (exact, case-insensitive), or None when it is unset or empty."""
+    allowed = {item.strip().casefold() for item in os.getenv("EMAIL_RECIPIENT_ALLOWLIST", "").split(",")}
+    allowed.discard("")
+    return allowed or None
 
 
 @email_bp.route("/send-email", methods=["POST"])
@@ -30,6 +39,21 @@ def send_email():
         not isinstance(email, str) or not email.strip() for email in recipients
     ):
         return jsonify({"error": "Field 'to' must contain at least one email address"}), 400
+
+    # Test environments set EMAIL_RECIPIENT_ALLOWLIST so real people are never mailed: the filter sits here,
+    # before the dry-run and provider branches, so it covers every delivery path. Production leaves it unset.
+    allowed = _allowed_recipients()
+    if allowed is not None:
+        kept = [email for email in recipients if email.strip().casefold() in allowed]
+        for email in recipients:
+            if email.strip().casefold() not in allowed:
+                logger.info("Recipient %s removed: not in EMAIL_RECIPIENT_ALLOWLIST", mask_email(email))
+        recipients = kept
+        if not recipients:
+            return jsonify({
+                "status": "skipped",
+                "message": "Nenhum destinatário permitido pela lista de destinatários; nada foi enviado",
+            }), 202
 
     subject = data.get("subject")
     content = data.get("content")
