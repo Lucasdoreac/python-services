@@ -101,6 +101,12 @@ class FlowController:
     def undo_reservation(reservation):
         ReservationManager().delete_reservation(reservation["_id"])
 
+    @staticmethod
+    def rollback_approval_start(event_id: str, expected_status: str, previous_status: str):
+        return ReservationManager().rollback_approval_start(
+            event_id, expected_status, previous_status
+        )
+
 
     def filter_reservation_by_date(date: str):
         try:

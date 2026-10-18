@@ -274,6 +274,7 @@ class ReservationManager:
                 {"$set": {"active": False, "consumed_at": datetime.now()}},
                 **options,
             )
+
             if token.modified_count != 1:
                 return False
 
@@ -364,6 +365,38 @@ class ReservationManager:
                     {"$set": {"active": True}, "$unset": {"consumed_at": ""}},
                 )
             raise
+
+    def rollback_approval_start(self, event_id, expected_status, previous_status):
+        """Restore an editable event when its approval notification could not start."""
+        from bson import ObjectId
+
+        previous_change = (
+            {"$set": {"status": previous_status}}
+            if previous_status is not None
+            else {"$unset": {"status": ""}}
+        )
+        restored = self.events_collection.update_one(
+            {"_id": ObjectId(event_id), "status": expected_status}, previous_change
+        )
+        if restored.matched_count != 1:
+            return False
+
+        try:
+            self.reservation_collection.update_many(
+                {"eventId": event_id, "status": expected_status}, previous_change
+            )
+            self.send_email_collection.update_many(
+                {"eventId": event_id, "active": True},
+                {"$set": {"active": False, "consumed_at": datetime.now()}},
+            )
+            self.events_collection.update_one(
+                {"_id": ObjectId(event_id), "status": previous_status},
+                {"$unset": {"approvalTokenGroups.1": "", "approvalTokenGroups.2": ""}},
+            )
+        except Exception:
+            self._restore_event_status(event_id, previous_status, expected_status)
+            raise
+        return True
 
     def insert_pdf(self, pdf_data):
         try:

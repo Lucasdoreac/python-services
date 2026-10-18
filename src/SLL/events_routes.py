@@ -76,38 +76,43 @@ def event_status_gate(event_id, data):
 
 def update_and_start_approval(event_id, data):
     if data.get('status') == 'requested':
-        if data.get('classificacao') in ['lecture', 'workshop']:
-            data['status'] = EventStatus.WAITING.value
+        classification = data.get('classificacao')
+        if classification in ['lecture', 'workshop', 'class', 'exam']:
+            data['eventId'] = event_id
+            event_before = FlowController.find_event_by_event_id(event_id) or {}
+            previous_status = event_before.get('status') or EventStatus.DRAFT.value
+            expected_status = (
+                EventStatus.WAITING.value
+                if classification in ['lecture', 'workshop']
+                else EventStatus.DIRECT_APPROVAL.value
+            )
+            data['status'] = expected_status
             result = FlowController.update_event(event_id, data)
             if _status_code(result) >= 400:
                 return result
             try:
-                pdf.generate_event_pdf(event_id=data['eventId'])
-                send_to_coordenacao(event_id=data['eventId'])
+                if classification in ['lecture', 'workshop']:
+                    pdf.generate_event_pdf(event_id=data['eventId'])
+                    send_to_coordenacao(event_id=data['eventId'])
+                else:
+                    send_reservation_info_to_reitoria(event_id=data['eventId'])
             except Exception as error:
+                rollback_ok = False
+                try:
+                    rollback_ok = FlowController.rollback_approval_start(
+                        event_id, expected_status, previous_status
+                    )
+                except Exception:
+                    pass
                 AppLogger.log(
                     Logmessage.EVENT_APPROVAL_START_FAILED,
                     LogType.ERROR,
                     event_id=data.get('eventId'),
                     error=type(error).__name__,
+                    rollback="complete" if rollback_ok else "incomplete",
                     ip_address=request.remote_addr,
                 )
-            return result
-        if data.get('classificacao') in ['class', 'exam']:
-            data['status'] = EventStatus.DIRECT_APPROVAL.value
-            result = FlowController.update_event(event_id, data)
-            if _status_code(result) >= 400:
-                return result
-            try:
-                send_reservation_info_to_reitoria(event_id=data['eventId'])
-            except Exception as error:
-                AppLogger.log(
-                    Logmessage.EVENT_APPROVAL_START_FAILED,
-                    LogType.ERROR,
-                    event_id=data.get('eventId'),
-                    error=type(error).__name__,
-                    ip_address=request.remote_addr,
-                )
+                return jsonify({"error": "Approval could not be started. Please retry."}), 503
             return result
     if data.get('status') == 'requested':
         # Not an event type that starts an approval: never store the raw request.

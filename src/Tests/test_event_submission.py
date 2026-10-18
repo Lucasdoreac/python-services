@@ -131,6 +131,33 @@ def test_failed_event_update_rolls_back_new_reservation(client, monkeypatch):
     assert event_document(event_id)["status"] == "draft"
 
 
+@pytest.mark.parametrize(
+    ("classification", "sender"),
+    [
+        ("lecture", "send_to_coordenacao"),
+        ("class", "send_reservation_info_to_reitoria"),
+    ],
+)
+def test_failed_approval_start_returns_error_and_releases_submission(
+    client, monkeypatch, classification, sender
+):
+    event_id = create_draft(client)
+
+    def fail_to_send(**kwargs):
+        raise ValueError("recipient unavailable")
+
+    monkeypatch.setattr(f"SLL.events_routes.{sender}", fail_to_send)
+    response = client.post(
+        f"/events/{event_id}/submit",
+        json={**EVENT, "classificacao": classification, **slot()},
+        headers=headers(OWNER),
+    )
+
+    assert response.status_code == 503
+    assert event_document(event_id)["status"] == "draft"
+    assert reservations(event_id) == []
+
+
 def test_other_user_cannot_submit_or_update_event(client):
     event_id = create_draft(client)
 

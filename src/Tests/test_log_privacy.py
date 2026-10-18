@@ -7,7 +7,7 @@ import requests
 from mongomock import MongoClient
 
 from Tests.test_event_submission import (  # noqa: F401
-    EVENT, OWNER, client, create_draft, headers, slot,
+    EVENT, OWNER, client, create_draft, event_document, headers, reservations, slot,
 )
 
 BODY_SENTINEL = "SENTINELA-CORPO-9f3a"
@@ -47,9 +47,11 @@ def test_approval_start_failure_log_has_no_exception_text(client, monkeypatch, c
             f"/events/{event_id}/submit", json={**EVENT, **slot()}, headers=headers(OWNER)
         )
 
-    assert response.status_code == 200
+    assert response.status_code == 503
     assert "approval start failed" in caplog.text
     assert ERROR_SENTINEL not in caplog.text
+    assert event_document(event_id)["status"] == "draft"
+    assert reservations(event_id) == []
 
 
 def test_auth_unavailable_log_has_no_exception_text(monkeypatch, caplog):
