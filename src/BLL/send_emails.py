@@ -12,17 +12,40 @@ from SLL.email_service import dry_run_response, is_email_dry_run, send_email
 from SLL.signed_links import signed_query
 
 
-if os.getenv("FLASK_ENV") == "development":
-    emails = {
-        "reitoria": ["danrleywillian@gmail.com", "guilherme.amaral2004@gmail.com"],
-        "coordenacao": ["dwcorpbrasil@gmail.com", "danrley.pereira@cs.udf.edu.br"]
+def _configured_recipients(key, fallback=(), environment=None):
+    """Use a comma-separated override, preserving defaults when it is absent."""
+    environment = os.environ if environment is None else environment
+    configured = environment.get(key)
+    source = fallback if configured is None else configured.split(",")
+    return list(dict.fromkeys(
+        address.strip().casefold() for address in source if address.strip()
+    ))
+
+
+def load_email_recipients(environment=None):
+    """Resolve approval recipients from environment, with legacy defaults."""
+    environment = os.environ if environment is None else environment
+    development = environment.get("FLASK_ENV") == "development"
+    recipients = {
+        "reitoria": _configured_recipients(
+            "EMAIL_RECIPIENTS_REITORIA",
+            ("danrleywillian@gmail.com", "guilherme.amaral2004@gmail.com")
+            if development else ("suelaine.santos@udf.edu.br",),
+            environment,
+        ),
+        "coordenacao": _configured_recipients(
+            "EMAIL_RECIPIENTS_COORDENACAO",
+            ("dwcorpbrasil@gmail.com", "danrley.pereira@cs.udf.edu.br")
+            if development else (),
+            environment,
+        ),
     }
-else:
-    emails = {
-        "reitoria": ["suelaine.santos@udf.edu.br"],
-        "coordenacao": [],
-        "reservas": ["bruno.silva@udf.edu.br"]
-    }
+    if not development:
+        recipients["reservas"] = ["bruno.silva@udf.edu.br"]
+    return recipients
+
+
+emails = load_email_recipients()
 
 
 def _pdf_link(event_id):
