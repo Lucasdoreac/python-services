@@ -41,6 +41,14 @@
 </head>
 <body>
     <div class="container">
+        {% if is_staging %}
+        <p style="margin:0 0 12px;padding:8px;background:#fff3cd;color:#664d03;font-weight:bold">AMBIENTE DE TESTE — STAGING</p>
+        {% endif %}
+        {% if logo_url %}
+        <p style="margin:0 0 16px"><img src="{{ logo_url }}" alt="DW Corp" width="180" style="display:block;width:180px;max-width:100%;height:auto;margin:0 auto;border:0" /></p>
+        {% else %}
+        <p style="margin:0 0 16px;font-weight:bold;color:#0D5580">DW Corp</p>
+        {% endif %}
         <div class="header">
             <!-- Conditional Title -->
             <h1>
@@ -77,17 +85,15 @@
         <!-- Conditional status icon (approved or denied) -->
         <div class="icon">
             {% if is_approved %}
-                <img src="{{ approved_icon_url }}" alt="Approved" width="120" />
+                <span style="font-size:48px;color:#28a745" role="img" aria-label="Aprovado">✔</span>
             {% else %}
-                <img src="{{ denied_icon_url }}" alt="Denied" width="120" />
+                <span style="font-size:48px;color:#dc3545" role="img" aria-label="Rejeitado">✖</span>
             {% endif %}
         </div>
 
         <!-- PDF icon (always shown) -->
         <div class="pdf-icon">
-            <a href="{{ pdf_link }}" target="_blank">
-                <img src="{{ pdf_icon_url }}" alt="PDF Icon" width="70" />
-            </a>
+            <a href="{{ pdf_link }}" target="_blank" style="display:inline-block;padding:10px 16px;background:#0D5580;color:#fff;text-decoration:none">📄 Ver detalhes / reserva (PDF)</a>
         </div>
     </div>
 </body>

@@ -11,6 +11,18 @@ from .index import events_repository, FlowController
 from utils.enums import EmailStep, EventStatus
 
 
+def _email_branding():
+    base_url = (os.getenv("EMAIL_ASSETS_BASE_URL") or "").strip().rstrip("/")
+    if not base_url:
+        scheme = current_app.config.get("SERVER_SCHEME", "https")
+        host = current_app.config.get("SERVER_NAME", "localhost:5000")
+        base_url = f"{scheme}://{host}"
+    return {
+        "logo_url": f"{base_url}/static/email/dw-corp.png",
+        "is_staging": os.getenv("APP_ENV", "").strip().lower() == "staging",
+    }
+
+
 if os.getenv("FLASK_ENV") == "development":
     emails = {
         "reitoria": ["danrleywillian@gmail.com", "guilherme.amaral2004@gmail.com"],
@@ -38,10 +50,7 @@ def send_to_coordenacao(event_id):
     tokenId = create_send_email_token(event_id, step=EmailStep.COORDENACAO)
     # MinIO icon URLs (adjust paths as needed)
     pdf_link = f"{os.getenv('MINIO_URL')}/labtech/reservation-pdfs/{event_id}.pdf"
-    pdf_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/pdf.png"
-    request_changes_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/request-changes.png"
-    approve_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/approve.png"
-    reject_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/reject.png"
+    pdf_icon_url = request_changes_icon_url = approve_icon_url = reject_icon_url = ""
 
     # Example links (adjust to your routes)
     with current_app.test_request_context():
@@ -65,7 +74,8 @@ def send_to_coordenacao(event_id):
         reject_icon_url=reject_icon_url,
         request_changes_link=request_changes_link,
         approve_link=approve_link,
-        reject_link=reject_link
+        reject_link=reject_link,
+        **_email_branding(),
     )
     if os.getenv("FLASK_ENV") == "development":
         return html_content
@@ -102,10 +112,7 @@ def send_to_reitoria(event_id):
     tokenId = create_send_email_token(event_id, step=EmailStep.REITORIA)
 
     # MinIO icon URLs (adjust paths as needed)
-    pdf_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/pdf.png"
-    request_changes_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/request-changes.png"
-    approve_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/approve.png"
-    reject_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/reject.png"
+    pdf_icon_url = request_changes_icon_url = approve_icon_url = reject_icon_url = ""
 
     # Example links (adjust to your routes)
     # Maybe Reitoria doesn't need a 'request changes' link. You can omit or include it as needed.
@@ -125,7 +132,8 @@ def send_to_reitoria(event_id):
         reject_icon_url=reject_icon_url,
         request_changes_link=request_changes_link,
         approve_link=approve_link,
-        reject_link=reject_link
+        reject_link=reject_link,
+        **_email_branding(),
     )
     if os.getenv("FLASK_ENV") == "development":
         return html_content
@@ -217,6 +225,7 @@ def send_reservation_info_to_reitoria(event_id, reservation_date=None, classific
         room_name=room_name,
         room_campus=campus_name,
         reservation_date=formatted_reservation_date,
+        **_email_branding(),
     )
 
     # 8. Return HTML content if in development mode
@@ -290,9 +299,7 @@ def send_event_status(event_id, is_approved: bool, who: str, token:str):
     reservation_manager = ReservationManager()
     reservation_manager.update_event(event_id, event_data=event)
     # MinIO icon URLs (adjust paths if needed)
-    pdf_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/pdf.png"
-    approved_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/approved.png"
-    denied_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/denied.png"
+    pdf_icon_url = approved_icon_url = denied_icon_url = ""
 
     # Render the template with the appropriate data
     html_content = render_template(
@@ -304,6 +311,7 @@ def send_event_status(event_id, is_approved: bool, who: str, token:str):
         approved_icon_url=approved_icon_url,
         denied_icon_url=denied_icon_url,
         who="Reitoria" if who == "reitoria" else "Coordenação",
+        **_email_branding(),
     )
     if os.getenv("FLASK_ENV") == "development":
         return html_content
