@@ -60,6 +60,14 @@
 </head>
 <body>
     <div class="container">
+        {% if is_staging %}
+        <p style="margin:0 0 12px;padding:8px;background:#fff3cd;color:#664d03;font-weight:bold">AMBIENTE DE TESTE — STAGING</p>
+        {% endif %}
+        {% if logo_url %}
+        <p style="margin:0 0 16px;text-align:center"><img src="{{ logo_url }}" alt="DW Corp" width="180" style="display:block;width:180px;max-width:100%;height:auto;margin:0 auto;border:0" /></p>
+        {% else %}
+        <p style="margin:0 0 16px;text-align:center;font-weight:bold;color:#0D5580">DW Corp</p>
+        {% endif %}
         <div class="header">
             <h2>Nova Reserva Criada</h2>
         </div>

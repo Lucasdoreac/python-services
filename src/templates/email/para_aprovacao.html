@@ -42,16 +42,24 @@
 </head>
 <body>
     <div class="container">
+        {% if is_staging %}
+        <p style="margin:0 0 12px;padding:8px;background:#fff3cd;color:#664d03;font-weight:bold">AMBIENTE DE TESTE — STAGING</p>
+        {% endif %}
+        {% if logo_url %}
+        <p style="margin:0 0 16px"><img src="{{ logo_url }}" alt="DW Corp" width="180" style="display:block;width:180px;max-width:100%;height:auto;margin:0 auto;border:0" /></p>
+        {% else %}
+        <p style="margin:0 0 16px;font-weight:bold;color:#0D5580">DW Corp</p>
+        {% endif %}
         <div class="header">
             <h1>Evento para Aprovação</h1>
         </div>
         <h2>Olá {{ user_type }}</h2>
         <p>O evento com os dados abaixo:</p>
 
-        <!-- PDF icon -->
+        <!-- Link PDF: texto e botão funcionam sem imagem remota. -->
         <div class="icon">
-            <a href="{{ pdf_link }}" target="_blank">
-                <img src="{{ pdf_icon_url }}" alt="PDF Icon" width="70" />
+            <a class="button" href="{{ pdf_link }}" target="_blank">
+                📄 Ver detalhes / reserva (PDF)
             </a>
         </div>
 
@@ -59,7 +67,7 @@
         {% if request_changes_link %}
             <p>
                 <a class="button" href="{{ request_changes_link }}">
-                    <img src="{{ request_changes_icon_url }}" alt="Request Changes" width="150" />
+                    ✏ Solicitar alterações
                 </a>
             </p>
         {% endif %}
@@ -67,10 +75,10 @@
         <!-- Reject and Approve buttons -->
         <p>
             <a class="button" href="{{ reject_link }}">
-                <img src="{{ reject_icon_url }}" alt="Rejected" width="120" />
+                ✖ Recusar
             </a>
             <a class="button" href="{{ approve_link }}">
-                <img src="{{ approve_icon_url }}" alt="Approved" width="120" />
+                ✔ Aprovar
             </a>
         </p>
     </div>
