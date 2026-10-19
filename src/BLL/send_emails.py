@@ -25,13 +25,13 @@ else:
     }
 
 
-def _configured_recipients(env_name, fallback_key):
-    """Use an explicit environment recipient list, retaining legacy defaults otherwise."""
-    configured = os.getenv(env_name)
-    if configured is None:
-        return list(emails.get(fallback_key, []))
+def _configured_recipients(key, fallback=(), environment=None):
+    """Use a comma-separated override, preserving defaults when it is absent."""
+    environment = os.environ if environment is None else environment
+    configured = environment.get(key)
+    source = fallback if configured is None else configured.split(",")
     return list(dict.fromkeys(
-        address.strip() for address in configured.split(",") if address.strip()
+        address.strip().casefold() for address in source if address.strip()
     ))
 
 
@@ -93,7 +93,7 @@ def send_to_coordenacao(event_id):
     if is_email_dry_run() and os.getenv("FLASK_ENV") != "development":
         return dry_run_response()
     recipients = _configured_recipients(
-        "EMAIL_RECIPIENTS_COORDENACAO", "coordenacao"
+        "EMAIL_RECIPIENTS_COORDENACAO", emails.get("coordenacao", ())
     )
     try:
         course_id = FlowController.find_event_by_event_id(event_id)
@@ -206,16 +206,19 @@ def send_to_reitoria(event_id):
         return html_content
 
     # Prepare the email payload
+    recipients = _configured_recipients(
+        "EMAIL_RECIPIENTS_REITORIA", emails.get("reitoria", ())
+    )
     payload = {
         'subject': 'Evento para Aprovação - Reitoria',
         'content': html_content,
-        'to': _configured_recipients("EMAIL_RECIPIENTS_REITORIA", "reitoria"),
+        'to': recipients,
         'is_html': True
     }
     AppLogger.log(
         Logmessage.SENDING_EMAIL,
         LogType.INFO,
-        email=_configured_recipients("EMAIL_RECIPIENTS_REITORIA", "reitoria"),
+        email=recipients,
         event=event_id,
     )
     return send_email(payload)
@@ -299,16 +302,19 @@ def send_reservation_info_to_reitoria(event_id, reservation_date=None, classific
         return html_content
 
     # 9. Prepare and send email
+    recipients = _configured_recipients(
+        "EMAIL_RECIPIENTS_REITORIA", emails.get("reitoria", ())
+    )
     payload = {
         'subject': 'Nova Reserva Criada',
         'content': html_content,
-        'to': _configured_recipients("EMAIL_RECIPIENTS_REITORIA", "reitoria"),
+        'to': recipients,
         'is_html': True
     }
     AppLogger.log(
         Logmessage.SENDING_EMAIL,
         LogType.INFO,
-        email=_configured_recipients("EMAIL_RECIPIENTS_REITORIA", "reitoria"),
+        email=recipients,
         event=event_id,
     )
 
