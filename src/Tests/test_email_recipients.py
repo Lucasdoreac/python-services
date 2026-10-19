@@ -30,6 +30,8 @@ def mail(monkeypatch):
     send_emails.send_email_repository = SendEmailrepository()
 
     monkeypatch.delenv("FLASK_ENV", raising=False)
+    monkeypatch.delenv("EMAIL_RECIPIENTS_COORDENACAO", raising=False)
+    monkeypatch.delenv("EMAIL_RECIPIENTS_REITORIA", raising=False)
     monkeypatch.setenv("EMAIL_DRY_RUN", "false")
     monkeypatch.setenv("CLOUD_FUNCTION_URL", "http://cloud-function.test")
     monkeypatch.setenv("CLOUD_FUNCTION_API_KEY", "test-function-key")
