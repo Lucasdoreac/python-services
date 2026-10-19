@@ -96,6 +96,7 @@ def test_approval_emails_issue_distinct_tokens_bound_to_each_action(
     existing_token_ids = {record["tokenId"] for record in db.send_email.find({"eventId": event_id})}
     configured_recipients = list(send_emails.emails["coordenacao"])
     monkeypatch.setenv("FLASK_ENV", "development")
+    monkeypatch.setenv("EMAIL_DRY_RUN", "true")
     monkeypatch.setattr(
         send_emails.FlowController,
         "find_event_by_event_id",
@@ -152,6 +153,8 @@ def test_coordinator_recipients_do_not_leak_between_events(approval_client, monk
     second_event, _, _ = create_approval(approval_client)
     captured_payloads = []
     monkeypatch.setitem(send_emails.emails, "coordenacao", [])
+    monkeypatch.delenv("EMAIL_RECIPIENTS_COORDENACAO", raising=False)
+    monkeypatch.delenv("EMAIL_RECIPIENTS_REITORIA", raising=False)
     monkeypatch.setenv("FLASK_ENV", "production")
     monkeypatch.setenv("EMAIL_DRY_RUN", "false")
     monkeypatch.setattr(
@@ -261,6 +264,7 @@ def test_reitoria_token_only_works_at_reitoria_stage(approval_client):
 
 def _coordination_email(send_emails, monkeypatch):
     monkeypatch.setenv("FLASK_ENV", "development")
+    monkeypatch.setenv("EMAIL_DRY_RUN", "true")
     monkeypatch.setattr(
         send_emails.FlowController,
         "find_event_by_event_id",
@@ -276,6 +280,13 @@ def test_coordinator_email_carries_the_request_changes_link(approval_client, mon
     event_id, _, _ = create_approval(approval_client)
     _coordination_email(send_emails, monkeypatch)
     email_html = send_emails.send_to_coordenacao(event_id)
+    assert email_html.count("<img") == 1
+    assert 'alt="DW Corp — You dream, we build"' in email_html
+    assert "minio" not in email_html.casefold()
+    assert "Abrir PDF da solicitação" in email_html
+    assert "Rejeitar" in email_html
+    assert "Aprovar" in email_html
+    assert "Solicitar alterações" in email_html
     db = MongoDBConnectionFactory.get_db()
     token = db.send_email.find_one(
         {"eventId": event_id, "action": "request_changes", "step": 0, "active": True}
@@ -288,6 +299,13 @@ def test_coordinator_email_carries_the_request_changes_link(approval_client, mon
 
     db.events.update_one({"_id": ObjectId(event_id)}, {"$set": {"status": "approved_by_coordenacao"}})
     reitoria_html = send_emails.send_to_reitoria(event_id)
+    assert reitoria_html.count("<img") == 1
+    assert 'alt="DW Corp — You dream, we build"' in reitoria_html
+    assert "minio" not in reitoria_html.casefold()
+    assert "Abrir PDF da solicitação" in reitoria_html
+    assert "Rejeitar" in reitoria_html
+    assert "Aprovar" in reitoria_html
+    assert "Solicitar alterações" not in reitoria_html
     assert "/request_changes" not in reitoria_html
     assert db.send_email.find_one({"eventId": event_id, "action": "request_changes", "step": 1}) is None
 
@@ -300,11 +318,29 @@ def test_the_coordinator_email_has_a_text_fallback_without_icons(approval_client
     monkeypatch.delenv("MINIO_URL", raising=False)
     email_html = send_emails.send_to_coordenacao(event_id)
     assert "Solicitar alterações" in email_html
-    assert 'alt="Solicitar alterações"' not in email_html  # no empty image without MinIO
+    assert email_html.count("<img") == 1
+    assert 'alt="DW Corp — You dream, we build"' in email_html
+    assert "Solicitar alterações" in email_html
+    assert "Aprovar" in email_html
+
+
+def test_status_email_uses_text_instead_of_remote_icons(approval_client, monkeypatch):
+    from BLL import send_emails
+
+    event_id, _, _ = create_approval(approval_client)
+    monkeypatch.setenv("FLASK_ENV", "development")
+    monkeypatch.setenv("EMAIL_DRY_RUN", "true")
+    email_html = send_emails.send_event_status(event_id, True, "coordenacao")
+    assert email_html.count("<img") == 1
+    assert 'alt="DW Corp — You dream, we build"' in email_html
+    assert "minio" not in email_html.casefold()
+    assert "Aprovado" in email_html
+    assert "Abrir PDF do evento" in email_html
 
 
 def test_the_organizer_is_told_what_was_asked_and_the_text_is_escaped(approval_client, monkeypatch):
     sent = []
+    monkeypatch.setenv("FLASK_ENV", "production")
     monkeypatch.setattr("BLL.send_emails.send_email", lambda payload: sent.append(payload))
     event_id, token_id, _ = create_approval(approval_client, action="request_changes")
     reason = "<b>trocar a sala</b> por uma com projetor"

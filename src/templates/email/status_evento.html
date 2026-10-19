@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+{% from "email/partials/brand_header.html" import branded_header %}
 <head>
     <meta charset="UTF-8" />
     <title>Evento - Status</title>
@@ -18,21 +19,6 @@
             padding: 20px;
             text-align: center;
         }
-        .header {
-            background: #0D5580;
-            color: #fff;
-            padding: 10px;
-            margin: -20px -20px 20px;
-        }
-        .header h1 {
-            margin: 0;
-        }
-        .icon {
-            margin: 20px 0;
-        }
-        .pdf-icon {
-            margin-top: 30px;
-        }
         .action-info {
             font-size: 16px;
             margin: 10px 0;
@@ -41,16 +27,7 @@
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <!-- Conditional Title -->
-            <h1>
-                {% if is_approved %}
-                    Evento Aprovado
-                {% else %}
-                    Evento Não Aprovado
-                {% endif %}
-            </h1>
-        </div>
+        {{ branded_header(logo_url, "Evento Aprovado" if is_approved else "Evento Não Aprovado") }}
 
         <h2>Olá {{ username }}</h2>
 
@@ -74,21 +51,12 @@
             </p>
         {% endif %}
 
-        <!-- Conditional status icon (approved or denied) -->
-        <div class="icon">
-            {% if is_approved %}
-                <img src="{{ approved_icon_url }}" alt="Approved" width="120" />
-            {% else %}
-                <img src="{{ denied_icon_url }}" alt="Denied" width="120" />
-            {% endif %}
-        </div>
-
-        <!-- PDF icon (always shown) -->
-        <div class="pdf-icon">
-            <a href="{{ pdf_link }}" target="_blank">
-                <img src="{{ pdf_icon_url }}" alt="PDF Icon" width="70" />
-            </a>
-        </div>
+        <p>
+            <strong style="display:inline-block;padding:8px 12px;border-radius:4px;color:#fff;background-color:{% if is_approved %}#16834a{% else %}#b42318{% endif %}">
+                {% if is_approved %}Aprovado{% else %}Não aprovado{% endif %}
+            </strong>
+        </p>
+        <p><a href="{{ pdf_link }}" target="_blank">Abrir PDF do evento</a></p>
     </div>
 </body>
 </html>

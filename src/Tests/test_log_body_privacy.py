@@ -115,6 +115,22 @@ def test_plain_text_log_message_is_written_as_is(caplog):
     assert "mensagem pronta {sem_campo}" in caplog.text
 
 
+def test_sending_email_log_does_not_require_an_unused_token(caplog):
+    from SLL.py_log import AppLogger, LogType, Logmessage
+
+    with caplog.at_level(logging.INFO):
+        AppLogger.log(
+            Logmessage.SENDING_EMAIL,
+            LogType.INFO,
+            email="lucas.dorea@cs.udf.edu.br",
+            event="event-123",
+        )
+
+    assert "Sending email" in caplog.text
+    assert "Erro na formatação" not in caplog.text
+    assert "lucas.dorea@cs.udf.edu.br" not in caplog.text
+
+
 def test_room_lookup_does_not_print_the_rejected_input(client, capsys):
     from DAL import ReservationManager
 
