@@ -83,12 +83,16 @@ class ResourcesRoutes:
     @resources_bp.route('/rooms', methods=['GET'])
     @token_required
     def get_rooms_by_id():
+        room_id = request.args.get("roomId")
+        if not room_id:
+            return jsonify({"error": "roomId is required"}), 400
         try:
-            room_id = request.args.get("roomId")
-            room_obj = FlowController.find_room_by_id(room_id)
-            return room_obj, 200
+            result = FlowController.find_room_by_id(room_id)
         except Exception:
             return jsonify({"error": "An unexpected error occurred"}), 500
+        if isinstance(result, tuple):  # resposta de erro devolvida pela consulta
+            return result
+        return jsonify(result), 200
 
 
 
