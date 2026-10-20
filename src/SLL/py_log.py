@@ -55,6 +55,7 @@ class Logmessage(Enum):
     AUTH_SERVICE_UNAVAILABLE = "Authentication service unavailable;"
     INTERNAL_APIS_CRASHED = "Internal APIs crashed; IP: {ip_address}; Payload: {payload}; Endpoint: {endpoint}; Error: {error};"
     ID_NOT_INFORMED = "ID not informed or null; IP: {ip_address}; Collection: {collection}; ID: {id};"
+    NOTIFY_RESERVATION_FAILED = "Reservation notice for event {event_id} failed: {error}; IP: {ip_address};"
 
 
 

@@ -1,7 +1,11 @@
 import os
+from bson import ObjectId
 from flask import Blueprint, request, jsonify, render_template
 from BLL import send_to_reitoria, send_to_coordenacao, send_event_status, send_reservation_info_to_reitoria
+from BLL.index import FlowController
 from BLL.send_emails import verify_token_from_email, apply_token_action, send_changes_request
+from SLL.auth_decorators import token_required
+from SLL.py_log import AppLogger, LogType, Logmessage
 from functools import wraps
 
 # Create a blueprint for handling templates and related routes.
@@ -84,6 +88,7 @@ def request_changes():
 
 
 @templates_bp.route('/notify_reservation', methods=['GET'])
+@token_required
 def notify_reservation():
     """
     Endpoint para notificar a reitoria sobre uma nova reserva.
@@ -93,9 +98,13 @@ def notify_reservation():
     if not event_id:
         return jsonify({'error': 'eventId is required'}), 400
 
-
-    if not event_id:
-        return jsonify({'error': 'eventId é obrigatório'}), 400
+    # Só o organizador do evento pode pedir este aviso.
+    event = FlowController.find_event_by_event_id(event_id) if ObjectId.is_valid(event_id) else None
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    owner = ((event.get('organizer') or {}).get('email') or '').strip().lower()
+    if owner != (request.headers.get('email') or '').strip().lower():
+        return jsonify({'error': 'Only the organizer can notify about this event'}), 403
 
     try:
         if os.getenv("FLASK_ENV") == "development":
@@ -110,7 +119,10 @@ def notify_reservation():
             else:
                 return jsonify({'success': False, 'message': 'Falha ao enviar email'}), 500
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        AppLogger.log(
+            Logmessage.NOTIFY_RESERVATION_FAILED, LogType.ERROR,
+            event_id=event_id, error=type(e).__name__, ip_address=request.remote_addr)
+        return jsonify({'error': 'An unexpected error occurred'}), 500
 
 @templates_bp.route('/store_changes', methods=['POST'])
 def store_changes():
