@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from hashlib import sha256
+from secrets import token_urlsafe
 from DAL.collections_repositories import SendEmailrepository
 import requests
 from flask import render_template, current_app, url_for
@@ -9,6 +9,25 @@ from SLL import AppLogger, Logmessage, LogType
 from SLL.cluster_api.request_methods import GraphQlRequestMethods
 from .index import events_repository, FlowController
 from utils.enums import EmailStep, EventStatus
+
+
+class InvalidApprovalToken(Exception):
+    """O token não corresponde ao evento e à etapa do link, ou já foi usado: nada foi gravado."""
+
+
+# A etapa (0 = Coordenação, 1 = Reitoria) que o parâmetro `who` do link representa.
+STEP_BY_WHO = {"coordenacao": EmailStep.COORDENACAO.value, "reitoria": EmailStep.REITORIA.value}
+
+
+def step_for_who(who):
+    """Etapa de aprovação para o `who` do link, ou None se for desconhecido."""
+    return STEP_BY_WHO.get(who)
+
+
+def expected_event_status(step):
+    """Status em que o evento precisa estar para a etapa poder decidir."""
+    return (EventStatus.WAITING.value if step == EmailStep.COORDENACAO.value
+            else EventStatus.APPROVED_BY_COORDENACAO.value)
 
 
 if os.getenv("FLASK_ENV") == "development":
@@ -35,6 +54,8 @@ def send_to_coordenacao(event_id):
         Response: HTTP response from the email sending service.
     """
     #crair email token de uso UNICO(so desativa token quando a acao for tomada ex: approve,rejected or requested change)
+    # Os links de envios anteriores desta etapa deixam de valer assim que um novo conjunto é emitido.
+    send_email_repository.deactivate_active_for_event_step(event_id, EmailStep.COORDENACAO.value)
     tokenId = create_send_email_token(event_id, step=EmailStep.COORDENACAO)
     # MinIO icon URLs (adjust paths as needed)
     pdf_link = f"{os.getenv('MINIO_URL')}/labtech/reservation-pdfs/{event_id}.pdf"
@@ -52,7 +73,10 @@ def send_to_coordenacao(event_id):
     course_id = FlowController.find_event_by_event_id(event_id)
     coordinator_id = get_coordinator_by_graduation_id(course_id['graduationId'])
     teacher_email = find_teacher_email_by_id(coordinator_id)
-    emails["coordenacao"].append(teacher_email)
+    # Cópia local: a lista global não pode acumular o coordenador de cada evento já enviado.
+    coordenacao_recipients = list(emails["coordenacao"])
+    if teacher_email not in coordenacao_recipients:
+        coordenacao_recipients.append(teacher_email)
 
     # Render the template with the appropriate data
     html_content = render_template(
@@ -75,7 +99,7 @@ def send_to_coordenacao(event_id):
     payload = {
         'subject': 'Evento para Aprovação - Coordenação',
         'content': html_content,
-        'to': ", ".join(emails["coordenacao"]),
+        'to': ", ".join(coordenacao_recipients),
         'is_html': True
     }
     headers = {
@@ -83,7 +107,7 @@ def send_to_coordenacao(event_id):
         'Content-Type': 'application/json'
     }
 
-    AppLogger.log(Logmessage.SENDING_EMAIL, LogType.INFO, email=emails["coordenacao"], event=event_id, token=tokenId)
+    AppLogger.log(Logmessage.SENDING_EMAIL, LogType.INFO, email=coordenacao_recipients, event=event_id, token=tokenId)
     # Send the request to your cloud function
     return requests.post(url, json=payload, headers=headers)
 
@@ -99,6 +123,7 @@ def send_to_reitoria(event_id):
         Response: HTTP response from the email sending service.
     """
     # crair email token de uso UNICO(so desativa token quando a acao for tomada ex: approve,rejected or requested change)
+    send_email_repository.deactivate_active_for_event_step(event_id, EmailStep.REITORIA.value)
     tokenId = create_send_email_token(event_id, step=EmailStep.REITORIA)
 
     # MinIO icon URLs (adjust paths as needed)
@@ -266,20 +291,22 @@ def send_event_status(event_id, is_approved: bool, who: str, token:str):
         action='approved' if is_approved else 'rejected',
         who=who,
         token=token)
+    step = step_for_who(who)
+    # O token precisa ser deste evento e desta etapa e ainda estar ativo; é consumido
+    # antes de qualquer gravação, então um link que não corresponde não altera nada.
+    if step is None or not apply_token_action(
+            step, "approved" if is_approved else "rejected", event_id, token):
+        raise InvalidApprovalToken()
     event_status = ""
     if is_approved:
-        if who == 'coordenacao':
-            apply_token_action(0, 'approved', event_id, token)
+        if who == "coordenacao":
             event_status = EventStatus.APPROVED_BY_COORDENACAO.value
         else:
-            apply_token_action(1, 'approved', event_id, token)
             event_status = EventStatus.APPROVED_BY_REITORIA.value
     else:
-        if who == 'coordenacao':
-            apply_token_action(0, 'rejected', event_id, token)
+        if who == "coordenacao":
             event_status = EventStatus.REJECTED_BY_COORDENACAO.value
         else:
-            apply_token_action(1, 'rejected', event_id, token)
             event_status = EventStatus.REJECTED_BY_REITORIA.value
 
     event = events_repository.find_by_id(event_id)
@@ -379,15 +406,20 @@ def send_changes_request(event_id, token:str) -> requests.Response:
     return response
 
 
-def verify_token_from_email(tokenId) -> bool:
-    data = send_email_repository.get_send_email_by_token_id(tokenId)
-
-    for record in data:
-        if tokenId == record.get("tokenId") and record.get("active") is True:
-            return True
+def verify_token_from_email(tokenId, event_id, step) -> bool:
+    """True só se o token existir, estiver ativo e tiver sido emitido para este evento e esta etapa,
+    e o evento estiver no status em que essa etapa decide (nada é gravado aqui)."""
+    if not tokenId or not event_id or step not in (EmailStep.COORDENACAO.value, EmailStep.REITORIA.value):
         return False
+    if send_email_repository.find_active_token(tokenId, event_id, step) is None:
+        return False
+    try:
+        event = events_repository.find_by_id(event_id)
+    except Exception:  # identificador que não é um ObjectId
+        return False
+    return bool(event) and event.get("status") == expected_event_status(step)
 
-def apply_token_action(step: int, action:str, eventId:str, tokenId: str) -> None:
+def apply_token_action(step: int, action:str, eventId:str, tokenId: str) -> bool:
     """"
         deactivate the token after the action is taken
         Args:
@@ -396,12 +428,14 @@ def apply_token_action(step: int, action:str, eventId:str, tokenId: str) -> None
             eventId (str): ID of the event.
             tokenId (str): Token ID for verification.
         Returns:
-            None
+            bool: True se este token ativo, deste evento e desta etapa foi consumido agora;
+            False se não correspondia (nada é alterado).
     """
     query = {
-        'eventId': eventId,
-        'step': step,
-        'tokenId': tokenId,
+        "eventId": eventId,
+        "step": step,
+        "tokenId": tokenId,
+        "active": True,
     }
 
     new_values = {
@@ -413,14 +447,13 @@ def apply_token_action(step: int, action:str, eventId:str, tokenId: str) -> None
         }
     }
 
-    send_email_repository.update_one(query, new_values)
-    
+    return send_email_repository.update_one(query, new_values).modified_count == 1
+
 
 send_email_repository = SendEmailrepository()
 
 def create_send_email_token(event_id: str,step: EmailStep)-> str:
-    now = datetime.now()
-    tokenId = sha256(str(now).encode()).hexdigest()
+    tokenId = token_urlsafe(32)  # imprevisível: o hash do horário atual podia ser adivinhado
     reservation_manager = ReservationManager()
     reservation_manager.insert_send_email(tokenId, step.value, event_id)
     return tokenId

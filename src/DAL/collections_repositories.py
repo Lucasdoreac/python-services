@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from .base_repository import BaseRepository
 
 
@@ -21,6 +21,22 @@ class SendEmailrepository(BaseRepository):
 
     def get_send_email_by_token_id(self, tokenId: str):
         return self.find_all({"tokenId": tokenId})
+
+    def find_active_token(self, token_id: str, event_id: str, step: int):
+        """Token ainda ativo e emitido para este evento e esta etapa; None caso contrário."""
+        return self.get_collection_name().find_one({
+            "tokenId": token_id,
+            "eventId": event_id,
+            "step": int(step),
+            "active": True,
+        })
+
+    def deactivate_active_for_event_step(self, event_id: str, step: int):
+        """Revoga os links anteriores da etapa antes de emitir um novo conjunto."""
+        return self.get_collection_name().update_many(
+            {"eventId": event_id, "step": int(step), "active": True},
+            {"$set": {"active": False, "revoked_at": datetime.now()}},
+        )
 
 
 class RoomsRepository(BaseRepository):

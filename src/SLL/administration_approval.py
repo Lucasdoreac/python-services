@@ -3,16 +3,35 @@ from bson import ObjectId
 from flask import Blueprint, request, jsonify, render_template
 from BLL import send_to_reitoria, send_to_coordenacao, send_event_status, send_reservation_info_to_reitoria
 from BLL.index import FlowController
-from BLL.send_emails import verify_token_from_email, apply_token_action, send_changes_request
+from BLL.send_emails import (InvalidApprovalToken, apply_token_action, send_changes_request,
+                             step_for_who, verify_token_from_email)
 from SLL.auth_decorators import token_required
 from SLL.py_log import AppLogger, LogType, Logmessage
 from functools import wraps
+from utils.enums import EmailStep
 
 # Create a blueprint for handling templates and related routes.
 templates_bp = Blueprint('templates_bp', __name__, template_folder='../templates')
 
 
+def _step_of_request():
+    """Etapa (0 Coordenação, 1 Reitoria) a que o link se refere: `who` ou `step`; None se inválido."""
+    if request.endpoint == "templates_bp.request_changes":
+        return EmailStep.COORDENACAO.value  # só a Coordenação pede alterações
+    who = request.args.get("who")
+    if who is not None:
+        return step_for_who(who)
+    step = request.args.get("step")
+    if step is not None and step.isdigit():
+        return int(step)
+    return None
+
+
 def check_request(f):
+    """O token do link precisa ser ativo e ter sido emitido para este evento e esta etapa.
+
+    Sem correspondência a resposta é 404 e nenhuma decisão é gravada.
+    """
     @wraps(f)
     def decorated_function(*args, **kwargs):
         tokenId = request.args.get('tokenId')
@@ -21,9 +40,7 @@ def check_request(f):
         if not (eventId and tokenId):
             return "Not found", 404
 
-        is_token_valid = verify_token_from_email(tokenId)
-
-        if is_token_valid is False:
+        if not verify_token_from_email(tokenId, eventId, _step_of_request()):
             return jsonify({'token': 'Desativado ou Não autorizado'}), 404
 
         return f(*args, **kwargs)
@@ -55,7 +72,10 @@ def approve():
     who = request.args.get('who')
     token = request.args.get('tokenId')
 
-    send_event_status(eventId, True, who, token)
+    try:
+        send_event_status(eventId, True, who, token)
+    except InvalidApprovalToken:
+        return jsonify({'token': 'Desativado ou Não autorizado'}), 404
     if who == "coordenacao":
         if os.getenv("FLASK_ENV") == "development":
             return send_to_reitoria(eventId)
@@ -70,9 +90,12 @@ def reject():
     who = request.args.get('who')
     token = request.args.get('tokenId')
 
+    try:
+        result = send_event_status(eventId, False, who, token)
+    except InvalidApprovalToken:
+        return jsonify({'token': 'Desativado ou Não autorizado'}), 404
     if os.getenv("FLASK_ENV") == "development":
-        return send_event_status(eventId, False, who, token)
-    send_event_status(eventId, False, who, token)
+        return result
     return "Evento rejeitado!"
 
 
