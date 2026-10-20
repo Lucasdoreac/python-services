@@ -1,7 +1,7 @@
 import os
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, render_template
 from BLL import send_to_reitoria, send_to_coordenacao, send_event_status, send_reservation_info_to_reitoria
-from BLL.send_emails import verify_token_from_email, apply_token_action
+from BLL.send_emails import verify_token_from_email, apply_token_action, send_changes_request
 from functools import wraps
 
 # Create a blueprint for handling templates and related routes.
@@ -80,11 +80,7 @@ def request_changes():
     who = request.args.get('who')
     token = request.args.get('tokenId')
 
-    if who == 'coordenacao':
-        apply_token_action(0, "Request Changes", eventId, token)
-    else:
-        apply_token_action(1, "Request Changes", eventId, token)
-    return "Solicitando alterações no evento!"
+    return send_changes_request(eventId, who, token)
 
 
 @templates_bp.route('/notify_reservation', methods=['GET'])
@@ -115,3 +111,14 @@ def notify_reservation():
                 return jsonify({'success': False, 'message': 'Falha ao enviar email'}), 500
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@templates_bp.route('/store_changes', methods=['POST'])
+def store_changes():
+    mudancas = request.form.get('mudancas')
+    if not mudancas:
+        return jsonify({'error': 'Faltou fornecer as mudanças.'}), 400
+    else:
+        return render_template(
+        'email/mudanças_prof.html',
+        mensagem=mudancas,
+        )
