@@ -6,6 +6,26 @@ import requests
 logger = logging.getLogger(__name__)
 
 
+class EmailDeliveryFailed(RuntimeError):
+    """A Cloud Function não aceitou a mensagem (não comprova entrega na caixa postal)."""
+
+
+def require_email_acceptance(response):
+    """Valida resposta HTTP; prévia HTML de development mantém seu contrato."""
+    status = getattr(response, "status_code", None)
+    if isinstance(status, int) and not 200 <= status < 300:
+        raise EmailDeliveryFailed(status)
+
+
+def recorded_decision_notice_failure():
+    """A decisão continua gravada; falha de notificação não autoriza repeti-la."""
+    return {
+        "error": "Decisão registrada, mas uma notificação não foi aceita. Não repita a decisão.",
+        "decisionRecorded": True,
+        "notificationAccepted": False,
+    }, 503
+
+
 def recipient_allowlist():
     """Endereços exatos de EMAIL_RECIPIENT_ALLOWLIST (minúsculos); vazio quando a variável não existe.
 

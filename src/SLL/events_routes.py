@@ -11,6 +11,7 @@ from BLL import FlowController,pdf
 from .auth_decorators import token_required
 from SLL.py_log import AppLogger,LogType,Logmessage
 from BLL import send_to_coordenacao, send_reservation_info_to_reitoria
+from SLL.email_service import require_email_acceptance as _raise_if_delivery_failed
 
 
 # Define your Flask Blueprint
@@ -44,21 +45,6 @@ def owner_required(function):
 
 def _status_code(result):
     return result[1] if isinstance(result, tuple) else getattr(result, 'status_code', 200)
-
-
-class ApprovalNotificationFailed(RuntimeError):
-    """O serviço de e-mail respondeu com um status que não é 2xx."""
-
-
-def _raise_if_delivery_failed(response):
-    """A Cloud Function é a única saída de e-mail: resposta que não seja 2xx é falha.
-
-    Em desenvolvimento os remetentes devolvem o HTML renderizado (sem ``status_code``),
-    o que não é uma resposta HTTP e não conta como falha.
-    """
-    status = getattr(response, 'status_code', None)
-    if isinstance(status, int) and not 200 <= status < 300:
-        raise ApprovalNotificationFailed(status)
 
 
 # The server owns the event status. A client may ask only to keep editing a draft

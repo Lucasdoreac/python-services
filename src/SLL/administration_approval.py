@@ -1,4 +1,6 @@
 import os
+import logging
+import requests
 from bson import ObjectId
 from flask import Blueprint, request, jsonify, render_template
 from BLL import send_to_reitoria, send_to_coordenacao, send_event_status, send_reservation_info_to_reitoria
@@ -9,6 +11,10 @@ from SLL.auth_decorators import token_required
 from SLL.py_log import AppLogger, LogType, Logmessage
 from functools import wraps
 from utils.enums import EmailStep
+from SLL.email_service import (EmailDeliveryFailed, require_email_acceptance,
+                               recorded_decision_notice_failure)
+
+logger = logging.getLogger(__name__)
 
 # Create a blueprint for handling templates and related routes.
 templates_bp = Blueprint('templates_bp', __name__, template_folder='../templates')
@@ -73,14 +79,24 @@ def approve():
     who = request.args.get('who')
     token = request.args.get('tokenId')
 
+    notification_failed = False
     try:
-        send_event_status(eventId, True, who, token)
+        require_email_acceptance(send_event_status(eventId, True, who, token))
     except InvalidApprovalToken:
         return jsonify({'token': 'Desativado ou Não autorizado'}), 404
+    except (EmailDeliveryFailed, requests.RequestException):
+        notification_failed = True
+        logger.warning("Decisão registrada; aviso ao organizador não aceito")
     if who == "coordenacao":
         if os.getenv("FLASK_ENV") == "development":
             return send_to_reitoria(eventId)
-        send_to_reitoria(eventId)
+        try:
+            require_email_acceptance(send_to_reitoria(eventId))
+        except (EmailDeliveryFailed, requests.RequestException):
+            notification_failed = True
+            logger.warning("Decisão registrada; encaminhamento à Reitoria não aceito")
+    if notification_failed:
+        return recorded_decision_notice_failure()
     return "Evento aprovado!"
 
 
@@ -93,8 +109,12 @@ def reject():
 
     try:
         result = send_event_status(eventId, False, who, token)
+        require_email_acceptance(result)
     except InvalidApprovalToken:
         return jsonify({'token': 'Desativado ou Não autorizado'}), 404
+    except (EmailDeliveryFailed, requests.RequestException):
+        logger.warning("Decisão registrada; aviso ao organizador não aceito")
+        return recorded_decision_notice_failure()
     if os.getenv("FLASK_ENV") == "development":
         return result
     return "Evento rejeitado!"

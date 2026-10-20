@@ -6,7 +6,7 @@ from flask import render_template, current_app, has_request_context, request, ur
 from DAL import EventNotEditable, ReservationManager
 from SLL import AppLogger, Logmessage, LogType
 from SLL.cluster_api.request_methods import GraphQlRequestMethods
-from SLL.email_service import send_email
+from SLL.email_service import send_email, require_email_acceptance, recorded_decision_notice_failure
 from .index import events_repository, FlowController
 from utils.enums import EmailStep, EventStatus
 
@@ -405,9 +405,7 @@ def changes_requested_action(event_id, token, message):
             'to': [email],
             'is_html': True
         })
-        status = getattr(response, "status_code", None)
-        if isinstance(status, int) and not 200 <= status < 300:
-            raise RuntimeError(f"HTTP {status}")
+        require_email_acceptance(response)
     except Exception as error:
         AppLogger.log(
             Logmessage.CHANGE_REQUEST_NOTICE_FAILED,
@@ -415,7 +413,8 @@ def changes_requested_action(event_id, token, message):
             event_id=event_id,
             error=type(error).__name__,
         )
-    return "Alterações solicitadas. O organizador foi avisado."
+        return recorded_decision_notice_failure()
+    return "Alterações registradas. O serviço de e-mail aceitou a notificação."
 
 
 def _reactivate_token(step, event_id, token_id):

@@ -142,7 +142,9 @@ def test_a_failed_notice_does_not_undo_the_recorded_request(client, send_emails,
 
     monkeypatch.setattr(send_emails, "send_email", send)
 
-    assert store(client, event_id, token_id).status_code == 200
+    response = store(client, event_id, token_id)
+    assert response.status_code == 503
+    assert response.get_json()["decisionRecorded"] is True
     assert event_document(event_id)["status"] == "requested_change"
 
 
