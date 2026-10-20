@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+{% from "email/partials/brand_header.html" import branded_header %}
 <head>
     <meta charset="UTF-8">
     <title>Nova Reserva Criada</title>
@@ -13,12 +14,6 @@
             max-width: 600px;
             margin: 0 auto;
             padding: 20px;
-        }
-        .header {
-            background-color: #003366;
-            color: white;
-            padding: 15px;
-            text-align: center;
         }
         .content {
             padding: 20px;
@@ -60,9 +55,7 @@
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h2>Nova Reserva Criada</h2>
-        </div>
+        {{ branded_header(logo_url, "Nova Reserva Criada", "#003366") }}
         <div class="content">
             <p>Prezada Reitoria,</p>
             <p>Uma nova reserva foi criada no sistema. Seguem as informações básicas:</p>
