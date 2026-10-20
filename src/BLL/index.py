@@ -5,6 +5,7 @@ from flask import jsonify
 from datetime import datetime, timedelta
 from DAL import *
 from DAL.collections_repositories import EventsRepository
+from DAL.reservation_manager import EventNotEditable
 from SLL.cluster_api.request_methods import RestApiRequestMethods, catalog_headers
 from utils.enums import EventStatus
 
@@ -83,6 +84,48 @@ class FlowController:
             return jsonify({'error': f'Missing field: {str(e)}'}), 400
         except ValueError as e:
             return jsonify({'error': 'Invalid data format'}), 400
+        except ReservationLockTimeout:
+            return jsonify({'error': 'Reservation is busy; retry the request'}), 503
+
+    @staticmethod
+    def reserve_for_event(event_id: str, room_id: str, reservation_date_str: str):
+        """Cria a reserva para a submissão, reaproveitando a do próprio evento."""
+        start = datetime.strptime(reservation_date_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+        end = start + timedelta(hours=3)
+        manager = ReservationManager()
+        if manager.find_active_reservation(event_id, room_id, start):
+            return None
+        return manager.insert_reservation(
+            room_id, event_id, start.date(), start.time(), end.time()
+        )
+
+    @staticmethod
+    def event_holds_reservation(event_id: str, room_id: str, reservation_date_str: str) -> bool:
+        """True se o próprio evento já tem a reserva ativa desta sala e deste horário (reenvio)."""
+        try:
+            start = datetime.strptime(reservation_date_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+        except (TypeError, ValueError):
+            return False
+        return bool(event_id) and ReservationManager().find_active_reservation(event_id, room_id, start) is not None
+
+    @staticmethod
+    def undo_reservation(reservation):
+        ReservationManager().delete_reservation(reservation["_id"])
+
+    @staticmethod
+    def reservation_ids_of_event(event_id: str):
+        return ReservationManager().find_reservation_ids_of_event(event_id)
+
+    @staticmethod
+    def release_reservations(reservation_ids):
+        """Libera os horários que o evento deixou de usar (reenviado com outra sala ou horário)."""
+        ReservationManager().delete_reservations(reservation_ids)
+
+    @staticmethod
+    def rollback_approval_start(event_id: str, expected_status: str, previous_status: str):
+        return ReservationManager().rollback_approval_start(
+            event_id, expected_status, previous_status
+        )
 
 
     def filter_reservation_by_date(date: str):
@@ -280,6 +323,9 @@ class FlowController:
             reservation_manager = ReservationManager()
             updated_event_id = reservation_manager.update_event(event_id, event_data)
             return jsonify({"eventId": updated_event_id}), 200
+
+        except EventNotEditable:
+            return jsonify({'error': 'The event can no longer be changed'}), 409
 
         except KeyError as e:
             error_msg = f'Missing field: {str(e)}'

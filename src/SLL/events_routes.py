@@ -1,7 +1,11 @@
+from functools import wraps
+
+from bson import ObjectId
 from flask import Blueprint, jsonify, request, make_response
 from flasgger import swag_from
 
 from utils.enums import EventStatus
+from DAL import EDITABLE_EVENT_STATUSES, ReservationConflict, ReservationLockTimeout
 from .swagger_docs import get_swagger_specification
 from BLL import FlowController,pdf
 from .auth_decorators import token_required
@@ -11,6 +15,128 @@ from BLL import send_to_coordenacao, send_reservation_info_to_reitoria
 
 # Define your Flask Blueprint
 events_bp = Blueprint('events', __name__)
+
+
+def owner_required(function):
+    """Permite alteração e submissão somente ao organizador autenticado."""
+    @wraps(function)
+    def decorated(event_id, *args, **kwargs):
+        event = (
+            FlowController.find_event_by_event_id(event_id)
+            if ObjectId.is_valid(event_id)
+            else None
+        )
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+        owner_email = ((event.get('organizer') or {}).get('email') or '').strip().lower()
+        request_email = (request.headers.get('email') or '').strip().lower()
+        if owner_email != request_email:
+            AppLogger.log(
+                Logmessage.EVENT_OWNER_MISMATCH,
+                LogType.WARNING,
+                event_id=event_id,
+                ip_address=request.remote_addr,
+            )
+            return jsonify({'error': 'Only the organizer can change this event'}), 403
+        return function(event_id, *args, **kwargs)
+    return decorated
+
+
+def _status_code(result):
+    return result[1] if isinstance(result, tuple) else getattr(result, 'status_code', 200)
+
+
+class ApprovalNotificationFailed(RuntimeError):
+    """O serviço de e-mail respondeu com um status que não é 2xx."""
+
+
+def _raise_if_delivery_failed(response):
+    """A Cloud Function é a única saída de e-mail: resposta que não seja 2xx é falha.
+
+    Em desenvolvimento os remetentes devolvem o HTML renderizado (sem ``status_code``),
+    o que não é uma resposta HTTP e não conta como falha.
+    """
+    status = getattr(response, 'status_code', None)
+    if isinstance(status, int) and not 200 <= status < 300:
+        raise ApprovalNotificationFailed(status)
+
+
+# The server owns the event status. A client may ask only to keep editing a draft
+# ("draft", or no status) or to submit it ("requested"); every stored status
+# after that comes from the approval flow. Editing or submitting is possible
+# only while the event is a draft or the coordination asked for changes.
+CLIENT_STATUSES = frozenset({EventStatus.DRAFT.value, 'requested'})
+EDITABLE_STATUSES = EDITABLE_EVENT_STATUSES
+
+
+def event_status_gate(event_id, data):
+    """Check the requested status against the stored one.
+
+    Returns an error response, or None when the request may go on; in that case
+    ``data['status']`` is already the value the server decided (the stored one
+    for an edit, ``requested`` for a submission).
+    """
+    requested = data.get('status')
+    if requested is not None and requested not in CLIENT_STATUSES:
+        return jsonify({'error': 'Invalid status'}), 400
+    event = FlowController.find_event_by_event_id(event_id) if ObjectId.is_valid(event_id) else None
+    current = (event or {}).get('status') or EventStatus.DRAFT.value
+    if current not in EDITABLE_STATUSES:
+        return jsonify({'error': 'The event can no longer be changed'}), 409
+    if requested != 'requested':
+        data['status'] = current
+    return None
+
+
+def update_and_start_approval(event_id, data):
+    """Grava o evento e, se foi enviado, inicia a aprovação.
+
+    O envio só vale se o aviso à Coordenação (ou à Reitoria) foi aceito pelo serviço de
+    e-mail: exceção ou resposta HTTP que não seja 2xx desfazem o envio (o evento volta ao
+    status anterior, os links emitidos são revogados) e a resposta é 503.
+    """
+    if data.get('status') == 'requested':
+        classification = data.get('classificacao')
+        if classification in ['lecture', 'workshop', 'class', 'exam']:
+            data['eventId'] = event_id
+            event_before = FlowController.find_event_by_event_id(event_id) or {}
+            previous_status = event_before.get('status') or EventStatus.DRAFT.value
+            expected_status = (
+                EventStatus.WAITING.value
+                if classification in ['lecture', 'workshop']
+                else EventStatus.DIRECT_APPROVAL.value
+            )
+            data['status'] = expected_status
+            result = FlowController.update_event(event_id, data)
+            if _status_code(result) >= 400:
+                return result
+            try:
+                if classification in ['lecture', 'workshop']:
+                    pdf.generate_event_pdf(event_id=event_id)
+                    _raise_if_delivery_failed(send_to_coordenacao(event_id=event_id))
+                else:
+                    _raise_if_delivery_failed(send_reservation_info_to_reitoria(event_id=event_id))
+            except Exception as error:
+                rollback_ok = False
+                try:
+                    rollback_ok = FlowController.rollback_approval_start(
+                        event_id, expected_status, previous_status
+                    )
+                except Exception:
+                    pass
+                AppLogger.log(
+                    Logmessage.EVENT_APPROVAL_START_FAILED,
+                    LogType.ERROR,
+                    event_id=event_id,
+                    error=type(error).__name__,
+                    rollback="complete" if rollback_ok else "incomplete",
+                    ip_address=request.remote_addr,
+                )
+                return jsonify({"error": "Approval could not be started. Please retry."}), 503
+            return result
+        # Not an event type that starts an approval: never store the raw request.
+        return jsonify({'error': 'Unsupported event type'}), 400
+    return FlowController.update_event(event_id, data)
 
 
 class EventsRoutes:
@@ -31,8 +157,6 @@ class EventsRoutes:
                           ou uma mensagem de erro e o status HTTP correspondente.
         """
         data = request.json
-        user_email = request.headers.get('email')
-        data['userEmail'] = user_email
         if not data:
             AppLogger.log(
                 Logmessage.MISSING_DATA,
@@ -40,6 +164,11 @@ class EventsRoutes:
                 ip_address=request.remote_addr,
             )
             return jsonify({'error': 'Missing data'}), 400
+        user_email = request.headers.get('email')
+        data['userEmail'] = user_email
+        if data.get('status') not in (None, EventStatus.DRAFT.value):
+            return jsonify({'error': 'Invalid status'}), 400
+        data['status'] = EventStatus.DRAFT.value  # a new event always starts as a draft
         id_event_response = FlowController.create_event(data)
 
         # Se id_event_response for uma tupla ou tiver o método get_json, extraia o valor:
@@ -74,14 +203,16 @@ class EventsRoutes:
 
         except Exception as error:
             AppLogger.log(
-            f"Erro interno: {error}",
-            LogType.ERROR,
-            ip_address=request.remote_addr,
+                Logmessage.EVENTS_LIST_FAILED,
+                LogType.ERROR,
+                error=type(error).__name__,
+                ip_address=request.remote_addr,
             )
             return jsonify({'error': 'Internal Server Error'}), 500
 
     @events_bp.route('/events/<string:event_id>', methods=['PUT'])
     @token_required
+    @owner_required
     @swag_from(get_swagger_specification(path='events', method='PUT'))
     def put_event(event_id):
         """
@@ -110,27 +241,60 @@ class EventsRoutes:
         user_email = request.headers.get('email')
 
         data['userEmail'] = user_email
+        rejection = event_status_gate(event_id, data)
+        if rejection is not None:
+            return rejection
+        result = update_and_start_approval(event_id, data)
 
-        result = FlowController.update_event(event_id, data)
+        response = make_response(result)
+        response.headers['Cache-Control'] = 'no-cache, no-store'
+        response.headers['Pragma'] = 'no-cache'
+        return response
 
+    @staticmethod
+    @events_bp.route('/events/<string:event_id>/submit', methods=['POST'])
+    @token_required
+    @owner_required
+    def submit_event(event_id):
+        """Reserva a sala e envia o evento para aprovação em uma chamada.
+
+        Alternativa a POST /reservations seguido de PUT /events/<id> (issue #64): as duas
+        rotas continuam disponíveis, o cliente escolhe uma.
+        """
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Missing data'}), 400
         try:
-            if data['status'] == 'requested': # flag que o front-end envia quando o evento é solicitado
-                # Enviar informação sobre evento ou reserva simples
-                if data['classificacao'] in ['lecture', 'workshop']:
-                    data['status'] = EventStatus.WAITING.value
-                    pdf.generate_event_pdf(event_id=data['eventId'])
-                    send_to_coordenacao(event_id=data['eventId'])
-                elif data['classificacao'] in ['class', 'exam']:
-                    data['status'] = EventStatus.DIRECT_APPROVAL.value
-                    FlowController.update_event(event_id, data)
-                    send_reservation_info_to_reitoria(event_id=data['eventId'])
-                result = FlowController.update_event(event_id, data)
-        except Exception as e:
-            AppLogger.log(
-                f"Erro ao começar processo de aprovação (status = requested) {data['eventId']}",
-                LogType.ERROR,
-                ip_address=request.remote_addr,
-            )
+            room_id = data['roomId']
+            reservation_date = data['reservationDate']
+        except KeyError as error:
+            return jsonify({'error': f'Missing field: {error}'}), 400
+
+        data.update({
+            'eventId': event_id,
+            'status': 'requested',
+            'userEmail': request.headers.get('email'),
+        })
+        rejection = event_status_gate(event_id, data)
+        if rejection is not None:
+            return rejection
+        previous = FlowController.reservation_ids_of_event(event_id)
+        try:
+            reservation = FlowController.reserve_for_event(event_id, room_id, reservation_date)
+        except ReservationConflict as error:
+            return jsonify({'error': str(error)}), 409
+        except ReservationLockTimeout:
+            return jsonify({'error': 'Reservation is busy; retry the request'}), 503
+        except ValueError:
+            return jsonify({'error': 'Invalid data format'}), 400
+
+        result = update_and_start_approval(event_id, data)
+        if _status_code(result) >= 400 and reservation is not None:
+            FlowController.undo_reservation(reservation)  # the previous reservation stays in place
+        elif reservation is not None:
+            # resubmitted with another room or time: the old slots are released only now that
+            # the new one is held and the submission went through
+            FlowController.release_reservations([rid for rid in previous if rid != reservation["_id"]])
 
         response = make_response(result)
         response.headers['Cache-Control'] = 'no-cache, no-store'

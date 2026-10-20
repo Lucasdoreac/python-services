@@ -24,6 +24,10 @@ class ReservationRoutes:
             )
             return jsonify({'error': 'Missing date'}), 400
 
+        # Repetir o pedido de uma reserva que este mesmo evento já tem (por exemplo depois de um
+        # 503 no envio) é idempotente: não conflita com a reserva do próprio evento.
+        if FlowController.event_holds_reservation(data.get("eventId"), data.get("roomId"), data.get("reservationDate")):
+            return jsonify({'success': "Reservation already held by this event"}), 201
         if FlowController.is_reserved(data['reservationDate'], data["roomId"]):
             return jsonify({'error': 'Room already reserved for this time'}), 400
         return FlowController.register_reservation_from_json(data)

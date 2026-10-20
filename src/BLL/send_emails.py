@@ -4,7 +4,7 @@ from secrets import token_urlsafe
 from DAL.collections_repositories import SendEmailrepository
 import requests
 from flask import render_template, current_app, url_for
-from DAL import ReservationManager
+from DAL import EventNotEditable, ReservationManager
 from SLL import AppLogger, Logmessage, LogType
 from SLL.cluster_api.request_methods import GraphQlRequestMethods
 from .index import events_repository, FlowController
@@ -310,11 +310,14 @@ def send_event_status(event_id, is_approved: bool, who: str, token:str):
 
     event = events_repository.find_by_id(event_id)
     email = event["organizer"]["email"]
-    event.pop("_id", None)
-    event["status"] = event_status
-    # update event status
-    reservation_manager = ReservationManager()
-    reservation_manager.update_event(event_id, event_data=event)
+    # Só o status é gravado, e só se o evento ainda está na etapa deste token: se outra
+    # decisão chegou antes, nada é gravado e o token volta a valer.
+    try:
+        ReservationManager().update_event(
+            event_id, {"status": event_status}, from_statuses=(expected_event_status(step),))
+    except EventNotEditable:
+        _reactivate_token(step, event_id, token)
+        raise InvalidApprovalToken()
     # MinIO icon URLs (adjust paths if needed)
     pdf_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/pdf.png"
     approved_icon_url = f"{os.getenv('MINIO_URL')}/labtech/email-icones/approved.png"
@@ -403,6 +406,14 @@ def send_changes_request(event_id, token:str) -> requests.Response:
     # Send the request to your cloud function
     response = requests.post(url, json=payload, headers=headers)
     return response
+
+
+def _reactivate_token(step, event_id, token_id):
+    """Devolve o token consumido quando a gravação da decisão não aconteceu."""
+    send_email_repository.update_one(
+        {"eventId": event_id, "step": step, "tokenId": token_id, "active": False},
+        {"$set": {"active": True, "update_at": datetime.now()}},
+    )
 
 
 def verify_token_from_email(tokenId, event_id, step) -> bool:

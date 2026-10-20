@@ -20,6 +20,18 @@ def create_app(config_class):
     # Load MongoDB Factory
     MongoDBConnectionFactory.init_app(app.config['MONGO_URI'], app.config['MONGO_DATABASE'])
 
+    # Rede de proteção no banco contra duas reservas ativas com a mesma sala e o mesmo início.
+    # Dados duplicados já existentes podem impedir a criação do índice: registra a falha (só o
+    # nome da classe, sem URI nem valores) e segue, em vez de derrubar a API.
+    from DAL import ReservationManager
+    try:
+        ReservationManager.ensure_indexes()
+    except Exception as error:
+        import logging
+        logging.getLogger(__name__).error(
+            "Could not create the active-reservation unique index (%s)", type(error).__name__
+        )
+
     from .auth_routes import auth_bp
     from .reservation_routes import reservation_bp
     from .events_routes import events_bp
