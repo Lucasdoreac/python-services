@@ -7,6 +7,7 @@ from flask import render_template, current_app, url_for
 from DAL import EventNotEditable, ReservationManager
 from SLL import AppLogger, Logmessage, LogType
 from SLL.cluster_api.request_methods import GraphQlRequestMethods
+from SLL.email_service import send_email
 from .index import events_repository, FlowController
 from utils.enums import EmailStep, EventStatus
 
@@ -95,21 +96,15 @@ def send_to_coordenacao(event_id):
         return html_content
 
     # Prepare the email payload
-    url = f"{os.getenv('CLOUD_FUNCTION_URL')}/send-email"
     payload = {
         'subject': 'Evento para Aprovação - Coordenação',
         'content': html_content,
         'to': ", ".join(coordenacao_recipients),
         'is_html': True
     }
-    headers = {
-        'X-API-Key': os.getenv('CLOUD_FUNCTION_API_KEY'),
-        'Content-Type': 'application/json'
-    }
-
     AppLogger.log(Logmessage.SENDING_EMAIL, LogType.INFO, email=coordenacao_recipients, event=event_id)
     # Send the request to your cloud function
-    return requests.post(url, json=payload, headers=headers)
+    return send_email(payload)
 
 def send_to_reitoria(event_id):
     """
@@ -156,22 +151,15 @@ def send_to_reitoria(event_id):
         return html_content
 
     # Prepare the email payload
-    url = f"{os.getenv('CLOUD_FUNCTION_URL')}/send-email"
     payload = {
         'subject': 'Evento para Aprovação - Reitoria',
         'content': html_content,
         'to': ", ".join(emails["reitoria"]),
         'is_html': True
     }
-    headers = {
-        'X-API-Key': os.getenv('CLOUD_FUNCTION_API_KEY'),
-        'Content-Type': 'application/json'
-    }
-
     AppLogger.log(Logmessage.SENDING_EMAIL, LogType.INFO, email=emails["reitoria"], event=event_id)
     # Send the request to your cloud function
-    response = requests.post(url, json=payload, headers=headers)
-    return response
+    return send_email(payload)
 
 
 def send_reservation_info_to_reitoria(event_id, reservation_date=None, classification=None):
@@ -249,18 +237,12 @@ def send_reservation_info_to_reitoria(event_id, reservation_date=None, classific
         return html_content
 
     # 9. Prepare and send email
-    url = f"{os.getenv('CLOUD_FUNCTION_URL')}/send-email"
     payload = {
         'subject': 'Nova Reserva Criada',
         'content': html_content,
         'to': ", ".join(emails["reitoria"]),
         'is_html': True
     }
-    headers = {
-        'X-API-Key': os.getenv('CLOUD_FUNCTION_API_KEY'),
-        'Content-Type': 'application/json'
-    }
-
     AppLogger.log(
         Logmessage.SENDING_EMAIL,
         LogType.INFO,
@@ -268,7 +250,7 @@ def send_reservation_info_to_reitoria(event_id, reservation_date=None, classific
         event=event_id,
     )
 
-    return requests.post(url, json=payload, headers=headers)
+    return send_email(payload)
 
 def send_event_status(event_id, is_approved: bool, who: str, token:str):
     """
@@ -341,21 +323,14 @@ def send_event_status(event_id, is_approved: bool, who: str, token:str):
     subject = "Evento Aprovado" if is_approved else "Evento Não Aprovado"
 
     # Prepare the email payload
-    url = f"{os.getenv('CLOUD_FUNCTION_URL')}/send-email"
     payload = {
         'subject': subject,
         'content': html_content,
         'to': [email],
         'is_html': True
     }
-    headers = {
-        'X-API-Key': os.getenv('CLOUD_FUNCTION_API_KEY'),
-        'Content-Type': 'application/json'
-    }
-
     # Send the request to your cloud function
-    response = requests.post(url, json=payload, headers=headers)
-    return response
+    return send_email(payload)
 
 def send_changes_request(event_id, token:str) -> requests.Response:
     AppLogger.log(
@@ -391,21 +366,14 @@ def send_changes_request(event_id, token:str) -> requests.Response:
     subject = "Evento Exige Alterações"
 
     # Prepare the email payload
-    url = f"{os.getenv('CLOUD_FUNCTION_URL')}/send-email"
     payload = {
         'subject': subject,
         'content': html_content,
         'to': [email],
         'is_html': True
     }
-    headers = {
-        'X-API-Key': os.getenv('CLOUD_FUNCTION_API_KEY'),
-        'Content-Type': 'application/json'
-    }
-
     # Send the request to your cloud function
-    response = requests.post(url, json=payload, headers=headers)
-    return response
+    return send_email(payload)
 
 
 def _reactivate_token(step, event_id, token_id):
