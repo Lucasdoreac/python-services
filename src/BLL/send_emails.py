@@ -107,7 +107,7 @@ def send_to_coordenacao(event_id):
         'Content-Type': 'application/json'
     }
 
-    AppLogger.log(Logmessage.SENDING_EMAIL, LogType.INFO, email=coordenacao_recipients, event=event_id, token=tokenId)
+    AppLogger.log(Logmessage.SENDING_EMAIL, LogType.INFO, email=coordenacao_recipients, event=event_id)
     # Send the request to your cloud function
     return requests.post(url, json=payload, headers=headers)
 
@@ -168,7 +168,7 @@ def send_to_reitoria(event_id):
         'Content-Type': 'application/json'
     }
 
-    AppLogger.log(Logmessage.SENDING_EMAIL, LogType.INFO, email=emails["reitoria"], event=event_id, token=tokenId)
+    AppLogger.log(Logmessage.SENDING_EMAIL, LogType.INFO, email=emails["reitoria"], event=event_id)
     # Send the request to your cloud function
     response = requests.post(url, json=payload, headers=headers)
     return response
@@ -266,7 +266,6 @@ def send_reservation_info_to_reitoria(event_id, reservation_date=None, classific
         LogType.INFO,
         email=emails["reitoria"],
         event=event_id,
-        message="Notification of new reservation"
     )
 
     return requests.post(url, json=payload, headers=headers)

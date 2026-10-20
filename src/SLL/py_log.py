@@ -38,7 +38,7 @@ class Logmessage(Enum):
     MISSING_TOKEN = "Token missing; email: {email}; IP: {ip_address};"
     INVALID_EMAIL_DOMAIN = "Invalid email domain; email: {email}; IP: {ip_address};"
     FAILED_SEND_EMAIL = "Email sender service unavailable: failed to send email; IP: {ip_address}; Email: {email};"
-    SENDING_EMAIL = "Sending email; email: {email}; event: {event}; token: {token};"
+    SENDING_EMAIL = "Sending email; email: {email}; event: {event};"
     EVENT_APPROVED_REJECTED_BY = "Event {event_id} {action} by {who}; token: {token};"
     EVENT_REQUESTED_CHANGES_BY = "Event {event_id} requested changes by {who}; token: {token};"
     MISSING_DATA = "Missing data;IP: {ip_address} ;"
