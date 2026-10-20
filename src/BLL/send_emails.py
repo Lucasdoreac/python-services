@@ -2,7 +2,6 @@ import os
 from datetime import datetime
 from secrets import token_urlsafe
 from DAL.collections_repositories import SendEmailrepository
-import requests
 from flask import render_template, current_app, has_request_context, request, url_for
 from DAL import EventNotEditable, ReservationManager
 from SLL import AppLogger, Logmessage, LogType
@@ -331,48 +330,92 @@ def send_event_status(event_id, is_approved: bool, who: str, token:str):
     # Send the request to your cloud function
     return send_email(payload)
 
-def send_changes_request(event_id, token:str) -> requests.Response:
+MAX_CHANGE_MESSAGE = 1000
+
+
+def _frontend_edit_link(event_id):
+    """Link do formulário de edição do evento na SPA: REACT_APP/event/type-selection?eventId=..."""
+    base = (os.getenv("REACT_APP") or "").strip().rstrip("/")
+    if not base:
+        return None
+    if "://" not in base:
+        local = base.startswith(("localhost", "127.0.0.1"))
+        base = f"{'http' if local else 'https'}://{base}"
+    return f"{base}/event/type-selection?eventId={event_id}"
+
+
+def changes_requested_action(event_id, token, message):
+    """A Coordenação pede alterações no evento (fluxo do PR #63, issue #35).
+
+    Só a Coordenação pode pedir alterações: o token precisa ser da etapa da Coordenação, deste
+    evento e estar ativo. O token é consumido, o evento (e sua reserva, que continua segurando a
+    sala enquanto o organizador corrige) passa a ``requested_change`` guardando a justificativa em
+    ``changeRequest`` e o organizador recebe o texto por e-mail, com o link para editar o evento.
+
+    Raises:
+        InvalidApprovalToken: o token não corresponde (nada é gravado).
+        ValueError: justificativa vazia ou longa demais (o token continua válido para corrigir).
+    """
+    message = (message or "").strip()
+    if not message or len(message) > MAX_CHANGE_MESSAGE:
+        raise ValueError("A justificativa deve ter de 1 a %d caracteres." % MAX_CHANGE_MESSAGE)
+
     AppLogger.log(
         Logmessage.EVENT_REQUESTED_CHANGES_BY,
         LogType.INFO,
         event_id=event_id,
-        action='Request Changes',
+        who="coordenacao",
         token=token)
 
-    #Aplication of action and change status on DB
-    apply_token_action(0, "Request Changes", event_id, token)
-    event_status = EventStatus.REQUESTED_CHANGE.value
+    step = EmailStep.COORDENACAO.value
+    if not apply_token_action(step, "requested_change", event_id, token):
+        raise InvalidApprovalToken()
 
-    #Find event by event_id
     event = events_repository.find_by_id(event_id)
     email = event["organizer"]["email"]
-    event.pop("_id", None)
-    event["status"] = event_status
+    try:
+        ReservationManager().update_event(
+            event_id,
+            {"status": EventStatus.REQUESTED_CHANGE.value,
+             "changeRequest": {
+                 "message": message,
+                 "requestedAt": datetime.now().isoformat(timespec="seconds"),
+                 "by": "coordenacao",
+             }},
+            from_statuses=(expected_event_status(step),),
+        )
+    except EventNotEditable:
+        _reactivate_token(step, event_id, token)
+        raise InvalidApprovalToken()
 
-    #Update event status
-    reservation_manager = ReservationManager()
-    reservation_manager.update_event(event_id, event_data=event)
-
-    # Render the template with the appropriate data
+    # E-mail ao organizador. O pedido já está registrado: se o aviso falhar, só vai ao log.
     html_content = render_template(
-        "email/mudancas.html",
+        "email/mudancas_prof.html",
+        logo_url=email_logo_url(),
         event_id=event_id,
+        mensagem=message,
+        edit_link=_frontend_edit_link(event_id),
     )
     if os.getenv("FLASK_ENV") == "development":
         return html_content
-
-    # Subject line changes based on approval or denial
-    subject = "Evento Exige Alterações"
-
-    # Prepare the email payload
-    payload = {
-        'subject': subject,
-        'content': html_content,
-        'to': [email],
-        'is_html': True
-    }
-    # Send the request to your cloud function
-    return send_email(payload)
+    try:
+        response = send_email({
+            'subject': 'Evento Exige Alterações',
+            'content': html_content,
+            'to': [email],
+            'is_html': True
+        })
+        status = getattr(response, "status_code", None)
+        if isinstance(status, int) and not 200 <= status < 300:
+            raise RuntimeError(f"HTTP {status}")
+    except Exception as error:
+        AppLogger.log(
+            Logmessage.CHANGE_REQUEST_NOTICE_FAILED,
+            LogType.ERROR,
+            event_id=event_id,
+            error=type(error).__name__,
+        )
+    return "Alterações solicitadas. O organizador foi avisado."
 
 
 def _reactivate_token(step, event_id, token_id):

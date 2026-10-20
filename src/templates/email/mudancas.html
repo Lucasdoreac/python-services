@@ -1,8 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
+{% from "email/partials/brand_header.html" import branded_header %}
 <head>
     <meta charset="UTF-8">
-    <title>Requisitar Edição</title>
+    <title>Requisitar edição</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -18,46 +19,25 @@
             padding: 20px;
             text-align: center;
         }
-        .header {
-            background: #0D5580;
-            color: #fff;
-            padding: 10px;
-            margin: -20px -20px 20px;
-        }
-        .header h1 {
-            margin: 0;
-        }
-        .button {
-            text-decoration: none;
-            margin: 0 5px;
-        }
-        .button img {
-            vertical-align: middle;
-            border: none;
-        }
-        .icon {
-            margin: 20px 0;
-        }
-
-
-
+        .error { color: #b42318; }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>Mudanças no Evento</h1>
-        </div>
+        {{ branded_header(logo_url, "Requisitar edição") }}
         <p>Informe as mudanças para retornar ao requisitante:</p>
+        {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
 
-    <p>Explique as mudanças:</p>
         <form action="/store_changes" method="post">
-            <textarea name="mudancas" rows="4" cols="50" placeholder="Digite as mudanças aqui..."></textarea>
+            <input type="hidden" name="eventId" value="{{ event_id }}">
+            <input type="hidden" name="tokenId" value="{{ token_id }}">
+            <label for="mudancas">Explique as mudanças:</label>
             <br>
-            <button type="submit" style="background-color: #28a745; border: none; border-radius: 25px; padding: 10px 40px; color: #fff; font-size: 16px;">Send</button>
+            <textarea id="mudancas" name="mudancas" rows="4" cols="50" maxlength="{{ max_length }}" required
+                      placeholder="Digite as mudanças aqui...">{{ mensagem }}</textarea>
+            <br>
+            <button type="submit" style="background-color: #28a745; border: none; border-radius: 25px; padding: 10px 40px; color: #fff; font-size: 16px;">Enviar</button>
         </form>
-
     </div>
-
 </body>
 </html>

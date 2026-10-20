@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+{% from "email/partials/brand_header.html" import branded_header %}
+<head>
+    <meta charset="UTF-8">
+    <title>Edição requisitada pelo coordenador</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f9f9f9;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+            background: #fff;
+            border: 1px solid #ddd;
+            padding: 20px;
+            text-align: center;
+        }
+        .request {
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 20px 0;
+            text-align: left;
+            border-radius: 5px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        {{ branded_header(logo_url, "Mudanças requisitadas pelo coordenador") }}
+
+        <p>Olá, professor(a).</p>
+        <p>A Coordenação do curso requisitou algumas mudanças no seu evento.</p>
+
+        <p>Mudanças solicitadas:</p>
+        <div class="request">{{ mensagem }}</div>
+
+        {% if edit_link %}
+        <a href="{{ edit_link }}" style="background-color: #28a745; border: none; border-radius: 25px; padding: 10px 40px; color: #fff; font-size: 16px; text-decoration: none; display: inline-block;">Editar o evento</a>
+        {% endif %}
+    </div>
+</body>
+</html>
