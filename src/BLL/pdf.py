@@ -1,4 +1,5 @@
 import os
+import tempfile
 from datetime import datetime
 from typing import Dict, Any
 import typst
@@ -25,6 +26,23 @@ def get_name_by_idODS(data: dict, filter_id: str) -> str:
             return item.get("name")
 
     return None
+
+
+# Longest text kept per field, so one request cannot make the PDF huge or slow to build.
+PDF_FIELD_LIMIT = 2000
+PDF_SHORT_FIELD_LIMIT = 200
+PDF_LONG_FIELDS = frozenset({"description", "resources", "students_monitors", "target_public",
+                             "entrepreneurial_path", "extension_project"})
+
+
+def pdf_fields(values):
+    """Strings for data.json: None becomes empty, everything is text and length-capped."""
+    cleaned = {}
+    for key, value in values.items():
+        text = "" if value is None else str(value)
+        limit = PDF_FIELD_LIMIT if key in PDF_LONG_FIELDS else PDF_SHORT_FIELD_LIMIT
+        cleaned[key] = text[:limit]
+    return cleaned
 
 
 def generate_event_pdf(event_id,data: Dict[str, Any] = None):
@@ -94,7 +112,7 @@ def generate_event_pdf(event_id,data: Dict[str, Any] = None):
         if isinstance(end_at, datetime):
             hora_final = end_at.strftime("%H:%M")
     except Exception as e:
-        print(f"Erro ao processar data/hora da reserva: {e}")
+        print(f"Erro ao processar data/hora da reserva: {type(e).__name__}")
 
     # Define valores padrão para campos que podem não ter sido informados
     entrepreneurial_path = event_data['entrepreneuralPath'] or "Não associado a trilha empreendedora"
@@ -116,6 +134,7 @@ def generate_event_pdf(event_id,data: Dict[str, Any] = None):
 
 
     typst_text = f"""
+#let d = json("data.json")
 
 // Título do Evento
 #set text(
@@ -164,9 +183,9 @@ def generate_event_pdf(event_id,data: Dict[str, Any] = None):
 
 #table(
   columns: 2,
-  [Responsável:], [`{event_data['organizer']['email'].split('@')[0]}`],
-  [E-mail do Responsável:], [`{event_data['organizer']['email']}`],
-  [Telefone:], [`{event_data['organizer']['phone']}`],
+  [Responsável:], [#raw(d.organizer_name)],
+  [E-mail do Responsável:], [#raw(d.organizer_email)],
+  [Telefone:], [#raw(d.organizer_phone)],
 )
 
 #set table(
@@ -214,13 +233,13 @@ def generate_event_pdf(event_id,data: Dict[str, Any] = None):
 
 #table(
   columns: 2,
-  [Tipo de Evento:], [`{event_data['eventTypeId']}`],
-  [ODS:], [`{name_ods}`],
-  [Descrição:], [`{event_data['description']}`],
-  [Curso:], [`{event_data['graduationId']}`],
-  [Número de Participantes Esperados:], [`{event_data['expectedSubscribers']}`],
-  [Trilha Empreendedora:], [`{entrepreneurial_path}`],
-  [Projeto de Extensão:], [`{extension_project}`],
+  [Tipo de Evento:], [#raw(d.event_type)],
+  [ODS:], [#raw(d.ods)],
+  [Descrição:], [#raw(d.description)],
+  [Curso:], [#raw(d.course)],
+  [Número de Participantes Esperados:], [#raw(d.expected_subscribers)],
+  [Trilha Empreendedora:], [#raw(d.entrepreneurial_path)],
+  [Projeto de Extensão:], [#raw(d.extension_project)],
   
 )
 
@@ -228,9 +247,9 @@ def generate_event_pdf(event_id,data: Dict[str, Any] = None):
 
 #table(
   columns: 2,
-  [Público Alvo:], [`{publico_alvo}`],
-  [Recursos Necessários:], [`{recursos_necessarios}`],
-  [Alunos Monitores:], [`{students_monitors}`],
+  [Público Alvo:], [#raw(d.target_public)],
+  [Recursos Necessários:], [#raw(d.resources)],
+  [Alunos Monitores:], [#raw(d.students_monitors)],
   
 )
 
@@ -262,34 +281,54 @@ def generate_event_pdf(event_id,data: Dict[str, Any] = None):
 #table(
   columns: 2,
   
-  [Sala:], [`{event_data['roomType']}`],
-  [Data:],[`{date}`],
-  [Horário de inicio:],[`{hours_start}`],
-  [Horário final:],[`{hours_end}`], 
+  [Sala:], [#raw(d.room)],
+  [Data:],[#raw(d.date)],
+  [Horário de inicio:],[#raw(d.hours_start)],
+  [Horário final:],[#raw(d.hours_end)], 
   
 )
     """
 
-    pdf_dir = os.path.join("PDFs")
-    os.makedirs(pdf_dir, exist_ok=True)
+    # Client-supplied text never enters the Typst source: it goes to data.json and
+    # the template reads it with #json, so markup in a field renders as plain text.
+    fields = pdf_fields({
+        "organizer_name": str((event_data['organizer'].get('email') or '').split('@')[0]),
+        "organizer_email": event_data['organizer'].get('email'),
+        "organizer_phone": event_data['organizer'].get('phone'),
+        "event_type": event_data['eventTypeId'],
+        "ods": name_ods,
+        "description": event_data['description'],
+        "course": event_data['graduationId'],
+        "expected_subscribers": event_data['expectedSubscribers'],
+        "entrepreneurial_path": entrepreneurial_path,
+        "extension_project": extension_project,
+        "target_public": publico_alvo,
+        "resources": recursos_necessarios,
+        "students_monitors": students_monitors,
+        "room": event_data['roomType'],
+        "date": date,
+        "hours_start": hours_start,
+        "hours_end": hours_end,
+    })
 
-    typst_file_path = os.path.join(pdf_dir, "evento.typ")
-    with open(typst_file_path, "w", encoding="utf-8") as typ_file:
-        typ_file.write(typst_text)
-    print(f"Arquivo Typst criado em: {typst_file_path}")
+    # Isola arquivos temporários por evento para que aprovações simultâneas
+    # não sobrescrevam o PDF umas das outras nem deixem arquivo local no serviço.
+    with tempfile.TemporaryDirectory(prefix=f"pdf-{event_id}-") as pdf_dir:
+        typst_file_path = os.path.join(pdf_dir, "evento.typ")
+        with open(typst_file_path, "w", encoding="utf-8") as typ_file:
+            typ_file.write(typst_text)
+        with open(os.path.join(pdf_dir, "data.json"), "w", encoding="utf-8") as data_file:
+            json.dump(fields, data_file, ensure_ascii=False)
 
-    pdf_bytes = typst.compile(typst_file_path)
+        pdf_path = os.path.join(pdf_dir, "evento.pdf")
+        with open(pdf_path, "wb") as pdf_file:
+            pdf_file.write(typst.compile(typst_file_path))
 
-    pdf_path = os.path.join(pdf_dir, "evento.pdf")
-    with open(pdf_path, "wb") as pdf_file:
-        pdf_file.write(pdf_bytes)
-
-    print(f"PDF gerado e salvo com sucesso em: {pdf_path}")
-
-    save_pdf(event_id)
+        save_pdf(event_id, pdf_path)
 
 
-def save_pdf(event_id):
+def save_pdf(event_id, local_pdf_path):
+    """Envia o PDF gerado ao MinIO (Typst -> upload -> caminho no Mongo), como antes."""
     MINIO_URL = f"{os.getenv('MINIO_URL')}"
     if '//' in MINIO_URL:
         MINIO_URL = MINIO_URL.split('//', 1)[1]
@@ -311,8 +350,6 @@ def save_pdf(event_id):
         if not client.bucket_exists(bucket_name):
             client.make_bucket(bucket_name)
 
-        # PDF file to upload
-        local_pdf_path = "PDFs/evento.pdf"
         object_name = f"reservation-pdfs/{event_id}.pdf"  # Object key in bucket
 
         # Upload the file
@@ -334,7 +371,7 @@ def save_pdf(event_id):
         print(f"Successfully uploaded {local_pdf_path} to {bucket_name}/{object_name}.")
 
     except S3Error as exc:
-        print("Error occurred:", exc)
+        print("Error occurred:", type(exc).__name__)
 
 
 def resolve_jsonlist(event_data, errormsg):
