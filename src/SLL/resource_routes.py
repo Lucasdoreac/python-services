@@ -1,3 +1,4 @@
+import logging
 import requests
 from flask import Blueprint, jsonify, request
 from flasgger import swag_from
@@ -86,8 +87,8 @@ class ResourcesRoutes:
             room_id = request.args.get("roomId")
             room_obj = FlowController.find_room_by_id(room_id)
             return room_obj, 200
-        except Exception as e:
-            return jsonify({"error": str(e)})
+        except Exception:
+            return jsonify({"error": "An unexpected error occurred"}), 500
 
 
 
@@ -139,7 +140,8 @@ class ResourcesRoutes:
 
         except requests.exceptions.RequestException as e:
             # Handle errors in the external API call
-            return jsonify({'error': 'Failed to fetch data from external API.', 'details': str(e)}), 502
+            logging.getLogger(__name__).warning('Catalog request failed: %s', type(e).__name__)
+            return jsonify({'error': 'Failed to fetch data from external API.'}), 502
         except ValueError:
             # Handle invalid JSON responses
             return jsonify({'error': 'Invalid JSON response from external API.'}), 500

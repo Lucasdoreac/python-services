@@ -82,7 +82,7 @@ class FlowController:
         except KeyError as e:
             return jsonify({'error': f'Missing field: {str(e)}'}), 400
         except ValueError as e:
-            return jsonify({'error': f'Invalid data format: {str(e)}'}), 400
+            return jsonify({'error': 'Invalid data format'}), 400
 
 
     def filter_reservation_by_date(date: str):
@@ -100,9 +100,9 @@ class FlowController:
         except KeyError as e:
             return jsonify({'error': f'Missing field: {str(e)}'}), 400
         except ValueError as e:
-            return jsonify({'error': f'Invalid data format: {str(e)}'}), 400
+            return jsonify({'error': 'Invalid data format'}), 400
         except Exception as e:
-            return jsonify({'error': f"An error ocucred: {str(e)}"}), 400
+            return jsonify({'error': "An unexpected error occurred"}), 400
 
     def filter_available_rooms(self, date_str: str, time_str: str, page: int, page_size: int, room_name: str = ""):
         """
@@ -151,7 +151,7 @@ class FlowController:
         except Exception as e:
             from SLL.py_log import AppLogger, LogType
             AppLogger.log(
-                f"Erro ao buscar campus: {str(e)}",
+                f"Erro ao buscar campus: {type(e).__name__}",
                 LogType.ERROR,
             )
             return []
@@ -169,7 +169,7 @@ class FlowController:
                 raise Exception("Erro ao buscar sala do shared-resources")
             return response.json()
         except Exception as e:
-            return jsonify({'error': f"An error ocucred: {str(e)}"}), 400
+            return jsonify({'error': "An unexpected error occurred"}), 400
 
     def find_all_rooms(self, page: int, page_size: int, room_name: str = ""):
         """
@@ -204,7 +204,7 @@ class FlowController:
                 raise Exception("Erro ao buscar campus do shared-resources")
             return response.json()
         except Exception as e:
-            return jsonify({'error': f"An error occurred: {str(e)}"}), 400
+            return jsonify({'error': "An unexpected error occurred"}), 400
 
     def find_types_by_collection(collection: str):
         """
@@ -224,7 +224,7 @@ class FlowController:
                 return {'types': types}
             return jsonify({'error': "Type not found"}), 404
         except Exception as e:
-            return jsonify({'error': f"An error ocucred: {str(e)}"}), 400
+            return jsonify({'error': "An unexpected error occurred"}), 400
 
 
     def create_event(data: Dict[str, Any]):
@@ -254,7 +254,7 @@ class FlowController:
             return jsonify({'error': error_msg}), 400
 
         except Exception as e:
-            return jsonify({'error': str(e)}), 500
+            return jsonify({'error': 'An unexpected error occurred'}), 500
 
 
     def update_event(event_id: str, data: Dict[str, Any]):
