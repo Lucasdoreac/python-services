@@ -6,14 +6,20 @@ from .swagger_docs import get_swagger_specification
 
 # App Factory
 def create_app(config_class):
-    from .security_headers import apply_security_headers, cors_origins, docs_enabled
+    import logging
+    from .insecure_dev import insecure_dev_allowed
+    from .security_headers import apply_security_headers, cors_open_by_default, cors_origins, docs_enabled
     app = Flask(__name__)
-    # A documentação (/apidocs e /apispec_1.json) só é servida com ENABLE_API_DOCS=true.
+    # A documentação (/apidocs e /apispec_1.json) segue aberta como na main; ENABLE_API_DOCS=false a fecha.
     if docs_enabled():
         Swagger(app)
     app.after_request(apply_security_headers)
     app.config.from_object(config_class)
-    # Só a origem do frontend (FRONTEND_URL) e as de CORS_ALLOWED_ORIGINS; nunca "*".
+    # Sem FRONTEND_URL nem CORS_ALLOWED_ORIGINS, qualquer origem é aceita (como a main); com alguma das duas, só as configuradas.
+    if cors_open_by_default() and not insecure_dev_allowed():
+        logging.getLogger(__name__).warning(
+            "FRONTEND_URL e CORS_ALLOWED_ORIGINS não definidos: CORS aberto a qualquer origem"
+        )
     CORS(app, origins=cors_origins(), supports_credentials=False)
 
     from DAL import MongoDBConnectionFactory

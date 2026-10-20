@@ -9,9 +9,8 @@ from SLL.insecure_dev import insecure_dev_allowed
 
 
 def docs_enabled():
-    """Swagger UI and the spec are off unless ENABLE_API_DOCS=true (or the development opt-out)."""
-    return (os.getenv("ENABLE_API_DOCS", "").strip().lower() in ("1", "true", "yes", "on")
-            or insecure_dev_allowed())
+    """Swagger UI and the spec are served as in main; ENABLE_API_DOCS=false (or 0/no/off) closes them."""
+    return os.getenv("ENABLE_API_DOCS", "").strip().lower() not in ("0", "false", "no", "off")
 
 
 def apply_security_headers(response):
@@ -31,14 +30,25 @@ def _origin(url):
     return f"{parts.scheme}://{parts.netloc}" if parts.scheme in ("http", "https") and parts.netloc else None
 
 
+def _configured(name):
+    return bool((os.getenv(name) or "").strip())
+
+
+def cors_open_by_default():
+    """True when neither FRONTEND_URL nor CORS_ALLOWED_ORIGINS is set: the API answers any origin, as in main."""
+    return not _configured("FRONTEND_URL") and not _configured("CORS_ALLOWED_ORIGINS")
+
+
 def cors_origins():
     """Origins allowed to call the API from a browser.
 
-    The origin of FRONTEND_URL plus the exact origins listed in
-    CORS_ALLOWED_ORIGINS (comma separated). With neither, no origin is allowed:
-    never "*". Only the development opt-out opens everything.
+    Without FRONTEND_URL and CORS_ALLOWED_ORIGINS, any origin is allowed ("*"),
+    as the main branch did; app.py logs a warning in that case. When either is
+    set, only the origin of FRONTEND_URL plus the exact origins listed in
+    CORS_ALLOWED_ORIGINS (comma separated) are allowed, never "*".
+    The development opt-out also opens everything.
     """
-    if insecure_dev_allowed():
+    if insecure_dev_allowed() or cors_open_by_default():
         return "*"
     origins = []
     for candidate in [os.getenv("FRONTEND_URL")] + (os.getenv("CORS_ALLOWED_ORIGINS") or "").split(","):

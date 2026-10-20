@@ -39,25 +39,44 @@ def test_hsts_only_over_https(client):
     assert secure.headers["Strict-Transport-Security"].startswith("max-age=")
 
 
-def test_docs_are_closed_by_default(monkeypatch):
-    for name in ("ENABLE_API_DOCS", "FLASK_ENV", "ALLOW_INSECURE_DEV"):
-        monkeypatch.delenv(name, raising=False)
-    assert not docs_enabled()
+def test_docs_are_open_by_default_as_in_main(monkeypatch):
+    monkeypatch.delenv("ENABLE_API_DOCS", raising=False)
+    assert docs_enabled()
+    monkeypatch.setenv("ENABLE_API_DOCS", "")  # vazio equivale a não definido
+    assert docs_enabled()
     monkeypatch.setenv("ENABLE_API_DOCS", "true")
     assert docs_enabled()
+
+
+def test_docs_close_only_with_an_explicit_false_value(monkeypatch):
+    for value in ("false", "FALSE", "0", "no", "off"):
+        monkeypatch.setenv("ENABLE_API_DOCS", value)
+        assert not docs_enabled(), value
+
+
+def test_app_serves_docs_by_default_and_closes_them_with_false(monkeypatch):
+    from mongomock import MongoClient
+
+    from configmodule import get_config
+    from DAL import MongoDBConnectionFactory
+    from SLL import create_app
+
+    def build():
+        # Mongo em memória e sem rede, como no conftest: o init_app não cria cliente real.
+        monkeypatch.setattr(MongoDBConnectionFactory, "_client", MongoClient())
+        monkeypatch.setattr(MongoDBConnectionFactory, "_database", "labtech_test")
+        return create_app(get_config()).test_client()
+
+    monkeypatch.delenv("ENABLE_API_DOCS", raising=False)
+    monkeypatch.delenv("ALLOW_INSECURE_DEV", raising=False)
+    client = build()
+    assert client.get("/apispec_1.json").status_code == 200
+    assert client.get("/apidocs/").status_code in (200, 301, 302)
+
     monkeypatch.setenv("ENABLE_API_DOCS", "false")
-    monkeypatch.setenv("ALLOW_INSECURE_DEV", "true")
-    assert not docs_enabled()  # the opt-out alone is not enough outside development
-    monkeypatch.setenv("FLASK_ENV", "development")
-    assert docs_enabled()
-
-
-def test_app_serves_no_docs_unless_enabled(monkeypatch, request):
-    for name in ("ENABLE_API_DOCS", "ALLOW_INSECURE_DEV"):
-        monkeypatch.delenv(name, raising=False)
-    client = request.getfixturevalue("client")  # a aplicação é criada depois de limpar o ambiente
-    assert client.get("/apidocs/").status_code == 404
+    client = build()
     assert client.get("/apispec_1.json").status_code == 404
+    assert client.get("/apidocs/").status_code == 404
     assert client.get("/health").headers["X-Content-Type-Options"] == "nosniff"
 
 
@@ -104,14 +123,37 @@ def test_extra_origins_are_exact(monkeypatch):
     assert allowed(client, "https://d.example.com") is None
 
 
-def test_without_configuration_no_origin_is_allowed_and_never_a_wildcard(monkeypatch):
+def test_without_configuration_any_origin_is_allowed_as_in_main(monkeypatch):
     client = cors_client(monkeypatch)
-    assert allowed(client, "https://reservas-web.example.com") is None
-    assert allowed(client, "null") is None
+    # flask_cors devolve a própria origem sob "*", igual ao CORS(app) da main.
+    assert allowed(client, "https://reservas-web.example.com") == "https://reservas-web.example.com"
+    assert allowed(client, "https://qualquer.example") == "https://qualquer.example"
+
+
+def test_empty_configuration_values_count_as_not_defined(monkeypatch):
+    from SLL.security_headers import cors_open_by_default
+
+    monkeypatch.setenv("FRONTEND_URL", "  ")
+    monkeypatch.setenv("CORS_ALLOWED_ORIGINS", "")
+    assert cors_open_by_default()
+
+
+def test_open_cors_by_default_is_reported_and_configured_cors_is_not(monkeypatch):
+    from SLL.security_headers import cors_open_by_default
+
+    monkeypatch.delenv('FRONTEND_URL', raising=False)
+    monkeypatch.delenv('CORS_ALLOWED_ORIGINS', raising=False)
+    assert cors_open_by_default()
+    monkeypatch.setenv("FRONTEND_URL", "https://a.example.com")
+    assert not cors_open_by_default()
+    monkeypatch.delenv("FRONTEND_URL")
+    monkeypatch.setenv("CORS_ALLOWED_ORIGINS", "https://b.example.com")
+    assert not cors_open_by_default()
 
 
 def test_the_development_opt_out_is_the_only_wildcard(monkeypatch):
     client = cors_client(monkeypatch, FLASK_ENV="development", ALLOW_INSECURE_DEV="true")
     assert allowed(client, "http://anything.test") == "http://anything.test"  # any origin, development only
-    client = cors_client(monkeypatch, FLASK_ENV="production", ALLOW_INSECURE_DEV="true")
-    assert allowed(client, "http://anything.test") is None
+    client = cors_client(monkeypatch, FLASK_ENV="production", ALLOW_INSECURE_DEV="true",
+                         FRONTEND_URL="https://a.example.com")
+    assert allowed(client, "http://anything.test") is None  # opt-out ignored outside development
