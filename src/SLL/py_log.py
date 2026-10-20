@@ -1,7 +1,13 @@
+import hashlib
 import logging
 import logging.config
+import os
+import re
+import sys
 from enum import Enum
 from datetime import datetime
+
+from flask import has_request_context, request
 
 # types of errors=
 # Invalid or missing credentials
@@ -24,7 +30,21 @@ from datetime import datetime
 # Deactivate werkzeug logs
 logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
-logging.basicConfig(level=logging.INFO, filename="py_log.log", filemode="a",
+def _handlers():
+    """O log vai para stdout (o que o host e o `docker logs` guardam) e continua no arquivo.
+
+    O arquivo (py_log.log, ou LOG_FILE) era o único destino e some a cada deploy; mantê-lo
+    preserva quem o lê. Se ele não puder ser aberto (diretório somente leitura), só o stdout fica.
+    """
+    handlers = [logging.StreamHandler(sys.stdout)]
+    try:
+        handlers.append(logging.FileHandler(os.getenv("LOG_FILE") or "py_log.log", mode="a"))
+    except OSError:
+        pass
+    return handlers
+
+
+logging.basicConfig(level=logging.INFO, handlers=_handlers(),
                     format="%(asctime)s - %(levelname)s - %(message)s")
 
 
@@ -55,11 +75,11 @@ class Logmessage(Enum):
     AUTH_SERVICE_UNAVAILABLE = "Authentication service unavailable;"
     INTERNAL_APIS_CRASHED = "Internal APIs crashed; IP: {ip_address}; Payload: {payload}; Endpoint: {endpoint}; Error: {error};"
     ID_NOT_INFORMED = "ID not informed or null; IP: {ip_address}; Collection: {collection}; ID: {id};"
-    NOTIFY_RESERVATION_FAILED = "Reservation notice for event {event_id} failed: {error}; IP: {ip_address};"
-    CHANGE_REQUEST_NOTICE_FAILED = "Change request notice for event {event_id} failed: {error};"
     EVENT_OWNER_MISMATCH = "Event {event_id} update denied to a non-organizer; IP: {ip_address};"
     EVENT_APPROVAL_START_FAILED = "Event {event_id} approval start failed: {error}; rollback: {rollback}; IP: {ip_address};"
     EVENTS_LIST_FAILED = "Events listing failed: {error}; IP: {ip_address};"
+    CHANGE_REQUEST_NOTICE_FAILED = "Change request notice for event {event_id} failed: {error};"
+    NOTIFY_RESERVATION_FAILED = "Reservation notice for event {event_id} failed: {error}; IP: {ip_address};"
 
 
 
@@ -71,15 +91,44 @@ class LogType(Enum):
     CRITICAL = logging.CRITICAL
 
 
+def mask_token(token) -> str:
+    """Impressão curta de um token: correlaciona linhas de log sem permitir reutilizá-lo.
+
+    Tokens de login e de aprovação dão acesso, então nunca chegam ao log.
+    """
+    if not token:
+        return "-"
+    return "sha256:" + hashlib.sha256(str(token).encode()).hexdigest()[:8]
+
+
+_SECRET = re.compile(
+    r"""(['"]?(?:token|hash|api[_-]?key|x-api-key|authorization|password|secret)['"]?\s*[:=]\s*['"]?)(?!sha256:)([^'"\s,;&})]+)""",
+    re.IGNORECASE,
+)
+
+
+def scrub_secrets(text: str) -> str:
+    """Troca o valor de qualquer rótulo token/hash/chave/senha por uma impressão curta."""
+    return _SECRET.sub(lambda match: match.group(1) + mask_token(match.group(2)), text)
+
+
 class AppLogger:
 
     @staticmethod
     def log(message: Logmessage, log_type: LogType, **kwargs):
+        for secret in ("token", "api_key"):
+            if secret in kwargs:
+                kwargs[secret] = mask_token(kwargs[secret])
+        if "ip_address" not in kwargs and has_request_context():
+            kwargs["ip_address"] = request.remote_addr
         try:
             current_date = datetime.timestamp(datetime.now())
             timestamp = datetime.timestamp(datetime.now())
-            formatted_message = f'{current_date} - {timestamp} - {message.value.format(**kwargs)}'
+            # Uma mensagem em texto simples (já montada por quem chama) é registrada como está.
+            text = message.value.format(**kwargs) if isinstance(message, Logmessage) else str(message)
+            formatted_message = scrub_secrets(f'{current_date} - {timestamp} - {text}')
         except KeyError as e:
+            # {e} é só o nome do campo que faltou (definido pelo nosso código), não dado do usuário.
             logging.error(f"Erro na formatação da mensagem de log:{e}")
             return
 

@@ -22,7 +22,7 @@ def teste_log_token_successfully(caplog):
     assert len(caplog.records) == 1
     log_record = caplog.records[0]
     assert log_record.levelname == "INFO"
-    expected_message = "Token validation failed; email: udf@udf.com; token: 12345; IP: localhost;"
+    expected_message = "Token validation failed; email: udf@udf.com; token: sha256:5994471a; IP: localhost;"
     assert  expected_message in log_record.message
 
 
@@ -94,7 +94,7 @@ def teste_missing_email_successfully(caplog):
     assert len(caplog.records) == 1
     log_record = caplog.records[0]
     assert log_record.levelname == "INFO"
-    expected_message = "Email missing; email: token: 1234; IP: localhost"
+    expected_message = "Email missing; email: token: sha256:03ac6742; IP: localhost"
     assert expected_message in log_record.message
 
 
