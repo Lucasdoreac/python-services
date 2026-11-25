@@ -1,7 +1,10 @@
+import os
+
 from flask import Blueprint, jsonify, request
 from flasgger import swag_from
 from .swagger_docs import get_swagger_specification
 from SLL.auth_decorators import token_required
+from SLL.email_policy import is_email_allowed
 from BLL import AuthenticationController
 from SLL.py_log import AppLogger,LogType,Logmessage
 
@@ -14,9 +17,9 @@ class AuthRoutes:
     @swag_from(get_swagger_specification('auth', 'POST'))
     def auth_mail():
         authentication_controller = AuthenticationController()
-        email = request.args.get('email')
-        allowed_emails = ["danrley.pereira@cs.udf.edu.br"]
-        if not (email.endswith('@udf.edu.br') or email in allowed_emails):
+        email = request.args.get('email', '').strip()
+        allowed_emails = os.getenv('AUTH_EMAIL_ALLOWLIST', 'danrley.pereira@cs.udf.edu.br')
+        if not is_email_allowed(email, allowed_emails):
             AppLogger.log(
                 Logmessage.INVALID_EMAIL_DOMAIN,
                 LogType.INFO,
