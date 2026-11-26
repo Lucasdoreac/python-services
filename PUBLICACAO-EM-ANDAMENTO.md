@@ -1,0 +1,1 @@
+DRAFT: a publicacao do candidato de Brasilia ainda nao foi concluida nem validada nesta branch. Nao usar, mesclar ou implantar. A proposta local deve ser publicada integralmente, testada e submetida a revisao manual antes de qualquer uso.
