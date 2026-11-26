@@ -1,4 +1,6 @@
 import logging
+import re
+from datetime import datetime, timedelta, timezone
 import requests
 from flask import Blueprint, jsonify, request
 from flasgger import swag_from
@@ -10,6 +12,18 @@ from SLL.py_log import AppLogger,LogType,Logmessage
 from .cluster_api.request_methods import GraphQlRequestMethods, catalog_headers
 
 resources_bp = Blueprint('resources', __name__)
+
+
+def parse_availability_start(value):
+    """ISO explícito em UTC ingênuo, representação usada no Mongo."""
+    if not re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})', value):
+        raise ValueError('invalid start_at')
+    if not value.endswith('Z') and (int(value[-5:-3]) > 23 or int(value[-2:]) > 59):
+        raise ValueError('invalid offset')
+    instant = datetime.fromisoformat(value.replace('Z', '+00:00'))
+    utc = instant.astimezone(timezone.utc).replace(tzinfo=None)
+    utc + timedelta(hours=3)
+    return utc
 
 
 
@@ -62,11 +76,29 @@ class ResourcesRoutes:
         page_size = request.args.get("page_size", 10, type=int)
         room_name = request.args.get("room_name", "")
 
-        if not date_str or not time_str:
+        start_values = request.args.getlist("start_at")
+        if start_values:
+            if len(start_values) != 1 or 'date' in request.args or 'time' in request.args:
+                return jsonify({"error": "Use start_at uma vez, sem date ou time."}), 400
+            try:
+                start_at = parse_availability_start(start_values[0])
+            except (ValueError, OverflowError):
+                return jsonify({"error": "start_at deve ser ISO 8601 com fuso explícito."}), 400
+        elif not date_str or not time_str:
             return jsonify({"error": "Parâmetros 'date' e 'time' são obrigatórios."}), 400
+        else:
+            start_at = None
+            try:
+                datetime.strptime(date_str, "%Y-%m-%d")
+                datetime.strptime(time_str, "%H:%M:%S")
+            except ValueError:
+                return jsonify({"error": "Data ou horário inválido."}), 400
 
         try:
-            available_rooms, pagination_config = FlowController().filter_available_rooms(date_str, time_str, page, page_size, room_name)
+            if start_at is None:
+                available_rooms, pagination_config = FlowController().filter_available_rooms(date_str, time_str, page, page_size, room_name)
+            else:
+                available_rooms, pagination_config = FlowController().filter_available_rooms(date_str, time_str, page, page_size, room_name, start_at=start_at)
             return jsonify({"data": available_rooms, "pagination": pagination_config}), 200
         except Exception as e:
             AppLogger.log(
