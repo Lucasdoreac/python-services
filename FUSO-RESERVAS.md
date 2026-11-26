@@ -1,4 +1,6 @@
-# Reservas: divergência de fuso — decisão pendente (draft)
+# Reservas: divergência de fuso — análise histórica (draft)
+
+**Atualização:** Brasília foi confirmada como fuso institucional. O contrato opt-in e as alterações desta branch estão em [CONTRATO-RESERVAS-BRASILIA.md](CONTRATO-RESERVAS-BRASILIA.md). O texto abaixo registra o diagnóstico anterior e não reflete o estado posterior do patch de meia-noite.
 
 Referências analisadas: frontend `Lucasdoreac/interfaces-usuario` PR #1, head `3bb8239a655a5e33d4348f8627e9c266873e1807`; API PR #2, base de trabalho `32518193aedbeeca03d78b3dc1bdf0331cddc34c`. São branches pessoais, não prova da API implantada nem do monorepo privado. Não há nesta análise contrato explícito que determine um fuso institucional para agendamento ou interpretação dos registros legados. O endereço do campus em Brasília e tratamentos históricos de GMT-3 não provam esse contrato.
 
